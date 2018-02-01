@@ -1,0 +1,10 @@
+time_purchase_ratio_feature_flag: True
+time_purchase_meta_feature_flag: False
+vertical_ratio_feature_flag: False
+purchase_percentile_feature_flag: True
+user_meta_feature_flag: True
+openness[('C_3_Penalty_l2_Threshold_50', 0.8128571428571425), ('C_4.5_Penalty_l1_Threshold_50', 0.80428571428571405), ('C_2_Penalty_l2_Threshold_50', 0.78857142857142792), ('C_4.5_Penalty_l2_Threshold_50', 0.78857142857142781), ('C_1_Penalty_l2_Threshold_50', 0.76999999999999957)]
+agreeableness[('C_1_Penalty_l1_Threshold_0', 0.53769230769230747), ('C_1_Penalty_l2_Threshold_0', 0.51230769230769224), ('C_3_Penalty_l1_Threshold_50', 0.5099999999999999), ('C_2_Penalty_l1_Threshold_50', 0.50142857142857156), ('C_3_Penalty_l2_Threshold_0', 0.50076923076923063)]
+conscientiousness[('C_1_Penalty_l1_Threshold_0', 0.67538461538461514), ('C_1_Penalty_l1_Threshold_30', 0.66749999999999998), ('C_1_Penalty_l1_Threshold_50', 0.66571428571428559), ('C_1_Penalty_l1_Threshold_10', 0.6641666666666669), ('C_2_Penalty_l1_Threshold_0', 0.66153846153846163)]
+extraversion[('C_4.5_Penalty_l1_Threshold_50', 0.56833333333333347), ('C_1_Penalty_l1_Threshold_50', 0.54499999999999993), ('C_4.5_Penalty_l1_Threshold_30', 0.50124999999999997), ('C_4.5_Penalty_l1_Threshold_0', 0.48538461538461541), ('C_4.5_Penalty_l2_Threshold_50', 0.45666666666666672)]
+neuroticism[('C_3_Penalty_l1_Threshold_50', 0.66166666666666663), ('C_2_Penalty_l1_Threshold_50', 0.65499999999999969), ('C_3_Penalty_l1_Threshold_0', 0.65461538461538449), ('C_4.5_Penalty_l1_Threshold_50', 0.65333333333333332), ('C_2_Penalty_l1_Threshold_30', 0.64857142857142847)]
