@@ -10,7 +10,7 @@ class CreateVocabularies:
 
     def __init__(self, description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method,
                  verbose_flag, participants_survey_data=None, participants_ebay_mapping_file=None,
-                 participants_purchase_history=None, personality_trait=None):
+                 participants_purchase_history=None, personality_trait=None, vertical=None, cur_time = None):
 
         self.description_file = description_file    # description file
         self.log_dir = log_dir                      # log directory
@@ -22,8 +22,9 @@ class CreateVocabularies:
 
         self.participants_survey_data = participants_survey_data                # participants survey data
         self.participants_ebay_mapping_file = participants_ebay_mapping_file    # ueBay user name + user_id
-        self.participants_purchase_history = participants_purchase_history      # history purchase
+        self.participants_purchase_history = participants_purchase_history      # history purchase - item_id + item_data (vertical, price, etc.)
         self.personality_trait = personality_trait  # personality traits to split text by
+        self.vertical = vertical                    # vertical to split by
 
         self.description_df = pd.DataFrame()        # contain all descriptions
         self.vertical_item_id_df = pd.DataFrame()   # load item id vertical connection
@@ -32,20 +33,23 @@ class CreateVocabularies:
         self.user_trait_df = pd.DataFrame()         # user's and their personality traits percentile
         self.user_ebay_df = pd.DataFrame()          # map eBay user name and his user_id
         self.user_item_id_df = pd.DataFrame()       # user and his items he bought
+        self.full_user_item_id_df = pd.DataFrame()  # item with all purchase data
 
         self.item_description_dict = dict()         # dictionary contain id and html code
         self.item_text_dict = dict()                # dictionary contain id and text extracted from html code
 
-        self.cur_time = str
+        if cur_time is not None:
+            self.cur_time = cur_time
+        else:
+            from time import gmtime, strftime
+            self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
         self.dir_vocabulary_name = str
         csv.field_size_limit(sys.maxsize)
 
     # build log object
     def init_debug_log(self):
         import logging
-        from time import gmtime, strftime
-
-        self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
         lod_file_name = self.log_dir + 'create_vocabularies_' + str(self.cur_time) + '.log'
 
@@ -68,11 +72,11 @@ class CreateVocabularies:
 
     def check_input(self):
 
-        if self.split_method not in ['vertical', 'traits']:
+        if self.split_method not in ['vertical', 'traits', 'traits_vertical']:
             raise('split method: ' + str(self.split_method) + ' is not defined')
 
         if self.vocabulary_method not in ['documents', 'aggregation']:
-            raise('vocabulary method: ' + str(self.vocabulary_method) + ' is not defined')
+            raise('vocabulary method: ' + str(self.vocabulary_method) + ' is not definedu')
 
         if self.gap_value > 1 or self.gap_value < 0:
             raise('gap value must be between zero to one')
@@ -82,6 +86,11 @@ class CreateVocabularies:
             os.makedirs(self.directory_output)
 
         self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/'
+        if not os.path.exists(self.dir_vocabulary_name):
+            os.makedirs(self.dir_vocabulary_name)
+
+        self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/' + \
+                                   str(self.personality_trait) + '_' + str(self.vertical) + '/'
         if not os.path.exists(self.dir_vocabulary_name):
             os.makedirs(self.dir_vocabulary_name)
 
@@ -95,14 +104,15 @@ class CreateVocabularies:
             self.vertical_item_id_df = pd.read_csv(self.participants_purchase_history)
             self.vertical_item_id_df = self.vertical_item_id_df[['item_id', 'BSNS_VRTCL_NAME']]
 
-        elif self.split_method == 'traits':
-            self.user_trait_df = pd.read_csv(participants_survey_data)  # participants survey data
+        elif self.split_method in ['traits', 'traits_vertical']:
+            self.user_trait_df = pd.read_csv(self.participants_survey_data)  # participants survey data
             self.user_trait_df = self.user_trait_df[['eBay site user name', self.personality_trait + '_percentile']]
 
-            self.user_ebay_df = pd.read_csv(participants_ebay_mapping_file)  # ueBay user name + user_id
+            self.user_ebay_df = pd.read_csv(self.participants_ebay_mapping_file)  # ueBay user name + user_id
             self.user_ebay_df = self.user_ebay_df[['USER_ID', 'USER_SLCTD_ID']]
 
-            self.user_item_id_df = pd.read_csv(participants_purchase_history)  # history purchase
+            self.user_item_id_df = pd.read_csv(self.participants_purchase_history)  # history purchase
+            self.full_user_item_id_df = self.user_item_id_df.copy(deep=True)
             self.user_item_id_df = self.user_item_id_df[['item_id', 'buyer_id']]
 
         return
@@ -113,6 +123,8 @@ class CreateVocabularies:
             self.vertical_split_item_into_groups()
         elif self.split_method == 'traits':
             self.traits_split_item_into_groups()
+        elif self.split_method == 'traits_vertical':
+            self.traits_vertical_split_item_into_groups()
         return
 
     # split items into groups by traits
@@ -139,7 +151,7 @@ class CreateVocabularies:
                 user_id_high_percentile_list.append(user_row['USER_ID'])
             elif user_row['USER_SLCTD_ID'] in user_name_low_percentile_list:
                 user_id_low_percentile_list.append(user_row['USER_ID'])
-
+        # item id per group
         item_id_high_percentile_list = list()
         item_id_low_percentile_list = list()
 
@@ -167,7 +179,6 @@ class CreateVocabularies:
 
             logging.info('Number of Valid description in high group: ' + str(len(cur_vocabulary_high_list)))
             logging.info('Number of Valid description in low group: ' + str(len(cur_vocabulary_low_list)))
-            raise
 
             self.save_vocabulary('high_' + str(self.personality_trait), cur_vocabulary_high_list)
             self.save_vocabulary('low_' + str(self.personality_trait), cur_vocabulary_low_list)
@@ -198,6 +209,82 @@ class CreateVocabularies:
         # iterate over each vertical group
         for vertical_name, group_df in price_group:
             self.create_vocabulary(vertical_name, group_df)
+        return
+
+    # split items into group by both vertical and traits
+    def traits_vertical_split_item_into_groups(self):
+
+        high_limit = 0.5 + (self.gap_value / 2)
+        low_limit = 0.5 - (self.gap_value / 2)
+
+        logging.info('High limit: ' + str(high_limit) + ', ' + 'Low limit: ' + str(low_limit))
+        # user name list per group - traits values
+        user_name_high_percentile_list = \
+            self.user_trait_df.loc[self.user_trait_df[self.personality_trait + '_percentile'] > high_limit][
+                'eBay site user name'].tolist()
+        user_name_low_percentile_list = \
+            self.user_trait_df.loc[self.user_trait_df[self.personality_trait + '_percentile'] < low_limit][
+                'eBay site user name'].tolist()
+
+        # user id per group
+        user_id_high_percentile_list = list()
+        user_id_low_percentile_list = list()
+
+        for index, user_row in self.user_ebay_df.iterrows():
+            if user_row['USER_SLCTD_ID'] in user_name_high_percentile_list:
+                user_id_high_percentile_list.append(user_row['USER_ID'])
+            elif user_row['USER_SLCTD_ID'] in user_name_low_percentile_list:
+                user_id_low_percentile_list.append(user_row['USER_ID'])
+
+        # item id per group
+        item_id_high_percentile_list = list()
+        item_id_low_percentile_list = list()
+
+        # get items per group
+        for index, user_row in self.user_item_id_df.iterrows():
+            if user_row['buyer_id'] in user_id_high_percentile_list:
+                item_id_high_percentile_list.append(user_row['item_id'])
+            elif user_row['buyer_id'] in user_id_low_percentile_list:
+                item_id_low_percentile_list.append(user_row['item_id'])
+
+        logging.info('Potential Number of description in high group: ' + str(len(item_id_high_percentile_list)))
+        logging.info('Potential Number of description in low group: ' + str(len(item_id_low_percentile_list)))
+
+        if self.vocabulary_method == 'documents':
+            cur_vocabulary_low_list = list()
+            cur_vocabulary_high_list = list()
+            count_miss_ver = 0
+            miss_desc = 0
+            for index, row in self.description_df.iterrows():
+
+                cur_item_data = self.full_user_item_id_df[self.full_user_item_id_df['item_id'] == row['item_id']]
+                if cur_item_data.iloc[0]['BSNS_VRTCL_NAME'] != self.vertical:
+                    # logging.info('Vertical is not matching: ' + str(cur_item_data['BSNS_VRTCL_NAME']))
+                    count_miss_ver += 1
+                    continue
+
+                if row['item_id'] in item_id_high_percentile_list:
+                    if isinstance(row['description'], basestring):
+                        cur_vocabulary_high_list.append(row['description'])
+                    else:
+                        miss_desc += 1
+
+                elif row['item_id'] in item_id_low_percentile_list:
+                    if isinstance(row['description'], basestring):
+                        cur_vocabulary_low_list.append(row['description'])
+                    else:
+                        miss_desc += 1
+
+            logging.info('Number of missing verticals: ' + str(count_miss_ver))
+            logging.info('Numner missing descriptions: ' + str(miss_desc))
+
+            logging.info('Number of Valid description in high group: ' + str(len(cur_vocabulary_high_list)))
+            logging.info('Number of Valid description in low group: ' + str(len(cur_vocabulary_low_list)))
+
+            self.save_vocabulary(str(self.vertical) + '_high_' + str(self.personality_trait) + '_amount_' + str(len(cur_vocabulary_high_list)), cur_vocabulary_high_list)
+            self.save_vocabulary(str(self.vertical) + '_low_' + str(self.personality_trait) + '_amount_' + str(len(cur_vocabulary_low_list)), cur_vocabulary_low_list)
+        else:
+            raise('aggregation method is not defined')
         return
 
     # find all relevant text per group
@@ -250,8 +337,6 @@ class CreateVocabularies:
         with open(group_file_name, 'wb') as fp:
             pickle.dump(cur_vocabulary, fp)
 
-
-
         logging.info("Save file: " + str(group_file_name))
         logging.info("")
         return
@@ -259,12 +344,12 @@ class CreateVocabularies:
 
 def main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,
          participants_survey_data=None, participants_ebay_mapping_file=None, participants_purchase_history=None,
-         personality_trait=None):
+         personality_trait=None, vertical=None):
 
     # init class
     create_vocabularies_obj = CreateVocabularies(description_file, log_dir, directory_output, split_method, gap_value,
                                                  vocabulary_method, verbose_flag, participants_survey_data,
-                                                 participants_ebay_mapping_file, participants_purchase_history, personality_trait)
+                                                 participants_ebay_mapping_file, participants_purchase_history, personality_trait, vertical)
 
     create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
@@ -285,7 +370,7 @@ if __name__ == '__main__':
     directory_output = 'vocabulary/'
     vocabulary_method = 'documents'     # 'documents', 'aggregation'
     verbose_flag = True
-    split_method = 'traits'     # 'vertical', 'traits'
+    split_method = 'traits_vertical'     # 'vertical', 'traits', 'traits_vertical'
     gap_value = 0.5             # must be a float number between zero to one
 
     # needed if split_method is traits
@@ -293,6 +378,7 @@ if __name__ == '__main__':
     participants_ebay_mapping_file = '../data/participant_data/personality_valid_users.csv'
     participants_purchase_history = '../data/participant_data/personality_purchase_history.csv'
     personality_trait = 'conscientiousness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
+    vertical = 'Fashion'
 
     main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,
-         participants_survey_data, participants_ebay_mapping_file, participants_purchase_history, personality_trait)
+         participants_survey_data, participants_ebay_mapping_file, participants_purchase_history, personality_trait, vertical)

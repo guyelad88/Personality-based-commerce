@@ -27,7 +27,9 @@ class ExtractDescriptions:
         from time import gmtime, strftime
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
-        lod_file_name = self.log_dir + 'analyze_description_' + str(self.cur_time) + '.log'
+        # lod_file_name = self.log_dir + 'predict_personality_from_desc_' + str(self.cur_time) + '.log'
+
+        lod_file_name = self.log_dir + '_extract_description_from_html_' + str(self.cur_time) + '.log'
 
         # logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -147,8 +149,11 @@ if __name__ == '__main__':
 
     # input file name
     description_file = '/Users/sguyelad/PycharmProjects/research/data/descriptions_data/descriptions.tsv'
-    description_file = '/Users/sguyelad/PycharmProjects/research/data/descriptions_data/2017_desc.csv'
-    log_dir = '/Users/sguyelad/PycharmProjects/research/kl/log/'
-    directory_output = '/Users/sguyelad/PycharmProjects/research/kl/descriptions/'
+    description_file = '/Users/sguyelad/PycharmProjects/research/data/descriptions_data/2018_desc.csv'
+    description_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/descriptions_data/2018_desc.csv'
+    description_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/descriptions_data/Descriptions_12_3_18_part_1/desc_kira_2017_01.csv'
+    # log_dir = '/Users/sguyelad/PycharmProjects/research/kl/log/'
+    log_dir = 'log/'
+    directory_output = 'descriptions_clean/'
     verbose_flag = True
     main(description_file, log_dir, directory_output, verbose_flag)

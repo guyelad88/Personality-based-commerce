@@ -270,6 +270,9 @@ class CalculateScore:
 
     # for each participant, send mail with his summary results
     def send_individual_mail(self):
+
+        raise('block send mail')
+
         for (idx, row_participant) in self.df.iterrows():
             logging.info('Participant: ' + str(row_participant['Username']))
             if idx > 0:
@@ -578,7 +581,9 @@ def main(name):
     calculate_obj.change_reverse_value()        # change specific column into reverse mode
     calculate_obj.calculate_average_score()     # calculate average score for the big five traits
     calculate_obj.calculate_all_scores()        #
-    calculate_obj.send_individual_mail()
+
+    # to send an email response with results
+    # calculate_obj.send_individual_mail()
 
 if __name__ == '__main__':
     main('guy')
