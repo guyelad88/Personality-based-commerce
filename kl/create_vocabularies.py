@@ -210,8 +210,8 @@ class CreateVocabularies:
             logging.info('Number of Valid description in high group: ' + str(len(cur_vocabulary_high_list)))
             logging.info('Number of Valid description in low group: ' + str(len(cur_vocabulary_low_list)))
 
-            self.save_vocabulary('high_' + str(self.personality_trait), cur_vocabulary_high_list)
-            self.save_vocabulary('low_' + str(self.personality_trait), cur_vocabulary_low_list)
+            self.save_vocabulary('high_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_high_list)), cur_vocabulary_high_list)
+            self.save_vocabulary('low_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_low_list)), cur_vocabulary_low_list)
 
         elif self.vocabulary_method == 'aggregation':
             cur_vocabulary_high = ''
@@ -409,7 +409,7 @@ if __name__ == '__main__':
     participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
     participants_purchase_history = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
 
-    personality_trait = 'openness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
+    personality_trait = 'agreeableness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
     vertical = ''   # 'Fashion'
 
     main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,

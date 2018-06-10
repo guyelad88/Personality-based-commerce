@@ -8,16 +8,50 @@ from calculate_word_contribute import CalculateWordContribute
 # Run personality-based LexRank algorithm.
 class WrapperLexRank:
 
+    """
+    Main function of the algorithm - run personalized-LexRank
+
+    :argument
+    summary_size: number of senetnces in the final summarization. 'max' or int
+    threshold: min similarity between two node (sen.) in the graph, discarded edge if sim is smaller.
+    damping_factor: prob. *not* to jump (low -> 'personalized' jump often occur)
+    summarization_similarity_threshold = max similarity of two sentences in the final desc.
+    target_sentences_length: {'min': , 'max': } - number of sentences in the input description.
+
+    personality_trait_dict: user personality ('H'/'L' assign to each trait)
+
+    corpus_size = 'max'
+    personality_word_flag:          if combine
+    random_walk_flag:               if combine "personalized" jump (matrix).
+    multi_document_summarization:   summarization method for single/multi documents
+    lex_rank_algorithm_version:     'personality-based-LexRank', 'vanilla-LexRank'
+    summarization_version:          'top_relevant', 'Bollegata', 'Shahaf'
+
+    corpus_path_file: file contain description to calculate idf from
+    trait_word_contribute_folder: path with all sub-dir contain w_c values
+    target_item_description_file: clean description (Amazon product) to run LexRank on them
+
+    log_dir = 'log/'
+    html_dir = 'html/'
+
+
+
+    :raises
+
+    :returns
+
+    """
     def __init__(self, corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder,
-                 personality_trait_dict, lex_rank_algorithm_version, summarization_version, personality_word_flag,
-                 random_walk_flag, damping_factor, summarization_similarity_threshold, target_sentences_length,
-                 summary_size, threshold, multi_document_summarization, corpus_size):
+                 trait_relative_path_dict, personality_trait_dict, lex_rank_algorithm_version, summarization_version,
+                 personality_word_flag, random_walk_flag, damping_factor, summarization_similarity_threshold,
+                 target_sentences_length, summary_size, threshold, multi_document_summarization, corpus_size):
 
         self.corpus_path_file = corpus_path_file
         self.log_dir = log_dir
         self.html_dir = html_dir
         self.target_item_description_file = target_item_description_file
-        self.trait_word_contribute_folder = trait_word_contribute_folder
+        self.trait_word_contribute_folder = trait_word_contribute_folder    # folder contain all token weights
+        self.trait_relative_path_dict = trait_relative_path_dict            # specific dir contain kl
         self.personality_trait_dict = personality_trait_dict
         self.lex_rank_algorithm_version = lex_rank_algorithm_version    # LexRank version
         self.summarization_version = summarization_version              # summarization version
@@ -46,11 +80,15 @@ class WrapperLexRank:
     def init_debug_log(self):
         import logging
 
-        lod_file_name = self.log_dir + 'LexRank_algorithm_' + str(self.cur_time) + '.log'
+        log_file_name = self.log_dir + 'LexRank_algorithm_' + str(self.cur_time) + '.log'
+
+        import os
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
 
         # logging.getLogger().addHandler(logging.StreamHandler())
 
-        logging.basicConfig(filename=lod_file_name,
+        logging.basicConfig(filename=log_file_name,
                             format='%(asctime)s, %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
@@ -134,7 +172,11 @@ class WrapperLexRank:
         self.log_attribute_input()      # log class arguments
 
         # calculate word contribute to current personality
-        word_contibute_obj = CalculateWordContribute(self.trait_word_contribute_folder, self.personality_trait_dict, logging)
+        word_contibute_obj = CalculateWordContribute(self.trait_word_contribute_folder,
+                                                     self.trait_relative_path_dict,
+                                                     self.personality_trait_dict,
+                                                     self.cur_time,
+                                                     logging)
         word_contibute_obj.calculate_user_total_word_contribute()
         word_cont_dict = word_contibute_obj.meta_word_contribute        # personality word contribute
 
@@ -158,11 +200,14 @@ class WrapperLexRank:
 
             desc_desc = desc_1 + '. ' + desc_2
 
-            if desc_id == 'B002C30S96':
-                a = 5
-            else:
-                continue
+            # if desc_id == 'B002C30S96':
+            #     a = 5
+            # else:
+            #     continue
+            # print('before: ' + str(cur_row_target_description['TEXT_LENGTH']))
+            # clean sentence (too short, duplication ...)
             target_sentences = self.clean_target_sentences(desc_desc)
+            # print('after: ' + str(len(target_sentences)))
 
             # limitation for number of sentences to summarize
             if len(target_sentences) > self.target_sentences_length['max'] \
@@ -264,60 +309,67 @@ class WrapperLexRank:
         return
 
 
-def main(corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder, personality_trait_dict,
-         lex_rank_algorithm_version, summarization_version, personality_word_flag, random_walk_flag, damping_factor,
-         summarization_similarity_threshold, target_sentences_length, summary_size, threshold, multi_document_summarization, corpus_size):
+def main(corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder,
+         trait_relative_path_dict, personality_trait_dict, lex_rank_algorithm_version, summarization_version,
+         personality_word_flag, random_walk_flag, damping_factor, summarization_similarity_threshold,
+         target_sentences_length, summary_size, threshold, multi_document_summarization, corpus_size):
 
-    LexRankObj = WrapperLexRank(corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder,
+    LexRankObj = WrapperLexRank(corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder, trait_relative_path_dict,
                                 personality_trait_dict, lex_rank_algorithm_version, summarization_version,
                                 personality_word_flag, random_walk_flag, damping_factor,
                                 summarization_similarity_threshold, target_sentences_length, summary_size, threshold, multi_document_summarization, corpus_size)
-    LexRankObj.init_debug_log()         # init log file
-    LexRankObj.test_lexrank()           #
+    LexRankObj.init_debug_log()
+    LexRankObj.test_lexrank()
 
 
 if __name__ == '__main__':
+
     # run LexRank algorithm
-    # TODO change to dir path
-    corpus_path_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/predict_personality_from_descriptions/descriptions/num_items_1552_2018-01-30 13:15:33.csv'
+    corpus_path_file = '../data/descriptions_data/1425 users input/merge_20048.csv'  # calculate idf from
+    trait_word_contribute_folder = '../results/kl/all_words_contribute/'
+    target_item_description_file = '../data/amazon_description/amazon_892.csv'  # load clean description
+
     log_dir = 'log/'
-    html_dir = 'html/'
-    summary_size = 4 # 'max'         # summarization length - 'max' or int
+    html_dir = '../results/lexrank/html/'
+    summary_size = 10             # summarization length - 'max' or int
     threshold = 0.03             # min edge weight between two sentences
     damping_factor = 0.01        # probability not to jump
     summarization_similarity_threshold = 0.3
     target_sentences_length = {
-        'min': 20,
+        'min': 15,
         'max': 23
     }
-    corpus_size = 'max'
+    corpus_size = 100  # 'max'          # limit idf computation time
     # please don't change (damping factor=1 same effect)
     personality_word_flag = True
     random_walk_flag = True                         # flag if combine random jump between sentences
-    # TODO infer from data
-    multi_document_summarization = 'single'         # summarization method for single/multi documents
 
-    lex_rank_algorithm_version = 'personality-based-LexRank'   # 'vanilla-LexRank', 'personality-based-LexRank'
-    summarization_version = 'top_relevant'          # 'top_relevant', 'Bollegata', 'Shahaf'
+    multi_document_summarization = 'single'         # summarization method for single/multi documents
+    lex_rank_algorithm_version = 'personality-based-LexRank'    # 'vanilla-LexRank', 'personality-based-LexRank'
+    summarization_version = 'top_relevant'                      # 'top_relevant', 'Bollegata', 'Shahaf'
 
     # current user personality - 'H'\'L'\'M' (high\low\miss(or mean))
     personality_trait_dict = {
-        'openness': 'H',
-        # 'conscientiousness': 'L',
-        'extraversion': 'H',
-        'agreeableness': 'H',
-        'neuroticism': 'H'
+        'openness': 'L',
+        'conscientiousness': 'L',
+        'extraversion': 'L',
+        'agreeableness': 'L',
+        'neuroticism': 'L'
     }
 
-    trait_word_contribute_folder = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/kl/results/all_words_contribute'
+    trait_relative_path_dict = {
+        'openness': 'openness/2018-06-10 08:15:21/',
+        'conscientiousness': 'conscientiousness/2018-06-10 08:25:33/',
+        'extraversion': 'extraversion/2018-06-10 08:26:11/',
+        'agreeableness': 'agreeableness/2018-06-10 08:27:58/',
+        'neuroticism': 'neuroticism/2018-06-10 08:24:22/'
+    }
 
-    # TODO
     # TODO add contribute to graph weight regards to traits
     # TODO personalization - binary per trait - load relevant file
 
-    target_item_description_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/amazon_description/amazon_1881.csv'
     main(corpus_path_file, log_dir, html_dir, target_item_description_file, trait_word_contribute_folder,
-         personality_trait_dict, lex_rank_algorithm_version, summarization_version, personality_word_flag,
+         trait_relative_path_dict, personality_trait_dict, lex_rank_algorithm_version, summarization_version, personality_word_flag,
          random_walk_flag, damping_factor, summarization_similarity_threshold, target_sentences_length, summary_size,
          threshold, multi_document_summarization, corpus_size)
 

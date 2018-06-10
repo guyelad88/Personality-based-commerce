@@ -85,7 +85,7 @@ class CreateVocabularies:
         self.dir_excel_token_appearance = self.results_dir + 'token/' + self.trait + '/'
 
         # input to Lex-rank algorithm (word + value)
-        self.dir_all_words_contribute = self.results_dir + 'all_words_contribute/' + self.trait + '/'
+        self.dir_all_words_contribute = self.results_dir + 'all_words_contribute/' + self.trait + '/' + self.cur_time + '/'
 
         # top k words with highest contribute and further explanation
         self.dir_top_k_word = self.results_dir + 'top_k/' + self.trait + '/'
@@ -436,8 +436,7 @@ class CreateVocabularies:
                 logging.info('Failed : ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
                 pass
 
-        excel_file_name = self.dir_all_words_contribute + str(self.trait) + '_' + str(file_name_p_distribution) + \
-                          '_time_' + str(self.cur_time) + '.xls'
+        excel_file_name = self.dir_all_words_contribute + str(self.trait) + '_' + str(file_name_p_distribution) + '.xls'
 
         logging.info('save all words contribute in file: ' + str(excel_file_name))
         book.save(excel_file_name)
@@ -607,29 +606,29 @@ def main(description_file_p, description_file_q, log_dir, results_dir, vocabular
 if __name__ == '__main__':
 
     # extraversion
-    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_2018-06-10 06:56:45.txt'
-    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2018-06-10 06:56:45.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_2018-06-10 06:56:45.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2018-06-10 06:56:45.txt'
 
     # openness
-    # description_file_p = '../results/vocabulary/2018-02-01 13:18:02/documents_high_openness.txt'
-    # description_file_q = '../results/vocabulary/2018-02-01 13:18:02/documents_low_openness.txt'
+    # description_file_p = '../results/vocabulary/openness/documents_high_openness_2018-06-10 07:28:45.txt'
+    # description_file_q = '../results/vocabulary/openness/documents_low_openness_2018-06-10 07:28:45.txt'
 
     # agreeableness
-    # description_file_p = '../results/vocabulary/2018-06-09 16:43:43/documents_high_agreeableness.txt'
-    # description_file_q = '../results/vocabulary/2018-06-09 16:43:43/documents_low_agreeableness.txt'
+    description_file_p = '../results/vocabulary/agreeableness/documents_high_agreeableness_2018-06-10 07:57:48.txt'
+    description_file_q = '../results/vocabulary/agreeableness/documents_low_agreeableness_2018-06-10 07:57:48.txt'
 
     # conscientiousness
-    # description_file_p = '../results/vocabulary/2018-02-01 13:42:52/documents_high_conscientiousness.txt'
-    # description_file_q = '../results/vocabulary/2018-02-01 13:42:52/documents_low_conscientiousness.txt'
+    # description_file_p = '../results/vocabulary/conscientiousness/documents_high_conscientiousness_2018-06-10 07:53:27.txt'
+    # description_file_q = '../results/vocabulary/conscientiousness/documents_low_conscientiousness_2018-06-10 07:53:27.txt'
 
     # neuroticism
-    # description_file_p = '../results/vocabulary/2018-06-04 13:08:32/documents_high_neuroticism.txt'
-    # description_file_q = '../results/vocabulary/2018-06-04 13:08:32/documents_low_neuroticism.txt'
+    # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
+    # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
 
     log_dir = 'log/'
     results_dir = '../results/kl/'
-    vocabulary_method = 'documents'             # 'documents', 'aggregation'
-    trait = 'extraversion'                     # 'neuroticism'
+    vocabulary_method = 'documents'    # 'documents', 'aggregation'
+    trait = 'agreeableness'    # 'agreeableness', 'extraversion', 'openness', 'conscientiousness', 'neuroticism'
     results_dir_title = trait + '_05_gap_'
     verbose_flag = True
 

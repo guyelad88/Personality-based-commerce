@@ -8,6 +8,18 @@ from power_method import stationary_distribution
 # class LexRank build all algorithm objects - (Graph (markov matrix)) and use power method class to
 # find stationary distribution
 class LexRank:
+    """
+    calculate LexRank (stationary distribution)
+    1. build Graph - a markov matrix
+    2. use power method to calculate stationary distribution
+
+    :argument
+
+    :returns
+
+    :raises
+
+    """
     def __init__(
         self,
         documents,                  # corpus entire data
@@ -106,6 +118,9 @@ class LexRank:
         if not isinstance(summary_size, int) or summary_size < 1:
             raise ValueError('\'summary_size\' should be a positive integer')
 
+        self.logging.info('')
+        self.logging.info('start get summary method')
+
         self.threshold = threshold
         self.summary_size = summary_size
 
@@ -146,6 +161,9 @@ class LexRank:
                 '\'threshold\' should be a floating-point number '
                 'from the interval [0, 1)',
             )
+
+        self.logging.info('')
+        self.logging.info('Rank sentences in LexRank')
 
         # original vectorizer (source library) - determine feature of splitting test sentences
         self.analyze = self.vectorizer.build_analyzer()
@@ -296,8 +314,10 @@ class LexRank:
             self.logging.info('')
             self.logging.info('build jump matrix: damping factor=' + str(self.damping_factor))
             jump_matrix = self._calculate_personality_based_jump_matrix(tf_scores)            # calculate jump matrix
+
             self.logging.info('jump matrix (normalize to 1)')
             self.logging.info(jump_matrix)
+
             jump_matrix = (1-self.damping_factor)*jump_matrix               # multiple with damping factor
 
             # adjacency matrix
@@ -434,6 +454,7 @@ class LexRank:
             else:
                 idf_score[word] = 0
 
+        self.logging.info('finish calculating idf score')
         return idf_score, dict_word_index
         '''
         vectorizer.vocabulary_.get('document')
@@ -763,6 +784,7 @@ class LexRank:
             myFile.write('<p>')
             sentence_words = sentence_str.split(' ')
 
+            # write words with background
             for cur_word in sentence_words:
                 token_list = self.analyze(cur_word)
                 if len(token_list) > 0:

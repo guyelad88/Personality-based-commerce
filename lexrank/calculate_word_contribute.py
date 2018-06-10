@@ -1,12 +1,20 @@
 import logging
 import pandas as pd
+import statistics
+from os import listdir
+from os.path import isfile, join
 
 
 class CalculateWordContribute:
-    def __init__(self, trait_word_contribute_folder, personality_trait_dict, logging):
+    """
 
-        self.trait_word_contribute_folder = trait_word_contribute_folder
-        self.personality_trait_dict = personality_trait_dict
+    """
+    def __init__(self, trait_word_contribute_folder, trait_relative_path_dict, personality_trait_dict, time, logging):
+
+        self.trait_word_contribute_folder = trait_word_contribute_folder    # folder contain all token weights
+        self.trait_relative_path_dict = trait_relative_path_dict            # specific dir contain kl
+        self.personality_trait_dict = personality_trait_dict                # 'H'/'L' to each personality
+        self.cur_time = time
         self.logging = logging
 
         self.meta_word_contribute = dict()
@@ -18,18 +26,26 @@ class CalculateWordContribute:
     # calculate word contribute to KL using merging all user personality trait value
     def calculate_user_total_word_contribute(self):
         self.logging.info('')
-        for cur_trait, trait_value in self.personality_trait_dict.iteritems():
+        for cur_trait, trait_value in self.personality_trait_dict.iteritems():      # check high/low input
 
             self.logging.info('Personality trait: ' + str(cur_trait) + ', Type: ' + str(trait_value))
 
             # build file path
-            cur_file_path = self.trait_word_contribute_folder + '/' + str(cur_trait) + '_'
+
+            cur_file_path = self.trait_word_contribute_folder + self.trait_relative_path_dict[cur_trait]
+
+            trait_file_suffix = [f for f in listdir(cur_file_path) if isfile(join(cur_file_path, f))]
+
             if trait_value == 'H':
-                cur_file_path += 'high.xls'
+                file_name = [s for s in trait_file_suffix if 'high' in s]
+                assert len(file_name) == 1
+                cur_file_path += file_name[0]
             elif trait_value == 'L':
-                cur_file_path += 'low.xls'
+                file_name = [s for s in trait_file_suffix if 'low' in s]
+                assert len(file_name) == 1
+                cur_file_path += file_name[0]
             else:
-                raise('currently we do not support M values')
+                raise ValueError('currently we do not support M values, only H/L ')
 
             # load excel file into df
             cur_trait_df = pd.read_excel(open(cur_file_path, 'rb'), sheet_name=0)
@@ -37,7 +53,6 @@ class CalculateWordContribute:
 
             # normalize trait to 0-1 scale (min-max version)
             cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].min()) / (cur_trait_df['contribute'].max() - cur_trait_df['contribute'].min())
-            # fix nan - cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].mean()) / cur_trait_df['contribute'].std()
 
             self.logging.info('normalize' + str(cur_trait) + ' trait to 0-1 scale')
 
@@ -72,17 +87,16 @@ class CalculateWordContribute:
             for cur_word, cur_val in self.meta_word_contribute.iteritems():
                 self.meta_word_contribute[cur_word] = (cur_val-min_value)/denominator
 
-        import statistics
         self.logging.info('')
         self.logging.info('word mean values: ' + str(round(statistics.mean(self.meta_word_contribute.values()), 3)))
         self.logging.info('word std values: ' + str(round(statistics.stdev(self.meta_word_contribute.values()), 3)))
 
-        self.log_word_contribute()
-        # save all term contribute in a file
+        self._log_word_contribute()         # save to log (and print in console) top k words
+        self._save_word_contribute()        # save word contribution in csv
         return
 
     # log top k most associated and unrelated words to user personality
-    def log_word_contribute(self):
+    def _log_word_contribute(self):
         import operator
         list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
         list_word_contribute_sort.reverse()
@@ -106,7 +120,6 @@ class CalculateWordContribute:
                 break
             line = self.get_line(w_i, word_cont_tuple)
             self.logging.info(line)
-        return
 
     # helper function to print row in log
     def get_line(self, w_i, word_cont_tuple):
@@ -115,21 +128,47 @@ class CalculateWordContribute:
                 str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
         return line
 
+    def _save_word_contribute(self):
+        """insert all token in ascending order regards to their contribution to user personality"""
+        import operator
+        # sort in ascending contribution order
+        list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
+        list_word_contribute_sort.reverse()
 
-def main(corpus_path_file, log_dir, target_sentences, trait_word_contribute_folder, personality_trait_dict,
-         summary_size, threshold):
-    CalWordContObj = CalculateWordContribute(trait_word_contribute_folder, personality_trait_dict)
+        df = pd.DataFrame(columns=['word', 'contribution', 'num_trait', 'trait_values'])
+
+        # insert token one-by-one
+        for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
+            df = df.append({
+                'word': word_cont_tuple[0],
+                'contribution': word_cont_tuple[1],
+                'num_trait': self.meta_word_count[word_cont_tuple[0]],
+                'trait_values':str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
+            }, ignore_index=True)
+
+        dir_name = '../results/lexrank/personality_word_contribution/'
+
+        for t, val in self.personality_trait_dict.items():
+            dir_name += t[:1].upper()
+            dir_name += '_'
+            dir_name += str(val)
+            dir_name += '_'
+        dir_name = dir_name[:-1]
+        dir_name += '/'
+
+        import os
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
+        file_path = dir_name + str(self.cur_time) + '.csv'
+
+        df.to_csv(file_path, index=False)
+        self.logging.info('save all word contribution: ' + str(file_path))
+
+
+def main():
+    pass
 
 
 if __name__ == '__main__':
-    # current user personality - 'H'\'L'\'M' (high\low\miss(or mean))
-    raise('main is not support from here')
-    personality_trait_dict = {
-        'openness': 'H',
-        'conscientiousness': 'L',
-        'extraversion': 'H',
-        'agreeableness': 'H',
-        'neuroticism': 'H'
-    }
-
-    trait_word_contribute_folder = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/kl/results/all_words_contribute'
+    raise Exception('main is not support from here')
