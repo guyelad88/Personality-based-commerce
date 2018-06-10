@@ -357,12 +357,20 @@ if __name__ == '__main__':
         'neuroticism': 'L'
     }
 
-    trait_relative_path_dict = {
+    '''trait_relative_path_dict = {
         'openness': 'openness/2018-06-10 08:15:21/',
         'conscientiousness': 'conscientiousness/2018-06-10 08:25:33/',
         'extraversion': 'extraversion/2018-06-10 08:26:11/',
         'agreeableness': 'agreeableness/2018-06-10 08:27:58/',
         'neuroticism': 'neuroticism/2018-06-10 08:24:22/'
+    }'''
+
+    trait_relative_path_dict = {
+        'openness': 'openness/2018-06-10 17:21:27_p_2058.0_q_632.0/',
+        'conscientiousness': 'conscientiousness/2018-06-10 17:35:18_p_522.0_q_2050.0/',
+        'extraversion': 'extraversion/2018-06-10 17:19:12_p_580.0_q_2477.0/',
+        'agreeableness': 'agreeableness/2018-06-10 17:33:14_p_567.0_q_2208.0/',
+        'neuroticism': 'neuroticism/2018-06-10 17:36:38_p_2137.0_q_875.0/'
     }
 
     # TODO add contribute to graph weight regards to traits

@@ -54,7 +54,7 @@ class CalculateWordContribute:
             # normalize trait to 0-1 scale (min-max version)
             cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].min()) / (cur_trait_df['contribute'].max() - cur_trait_df['contribute'].min())
 
-            self.logging.info('normalize' + str(cur_trait) + ' trait to 0-1 scale')
+            self.logging.info('normalize ' + str(cur_trait) + ' trait to 0-1 scale')
 
             for index, cur_row in cur_trait_df.iterrows():
                 cur_word = cur_row['Word']

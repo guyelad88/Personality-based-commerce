@@ -85,7 +85,7 @@ class CreateVocabularies:
         self.dir_excel_token_appearance = self.results_dir + 'token/' + self.trait + '/'
 
         # input to Lex-rank algorithm (word + value)
-        self.dir_all_words_contribute = self.results_dir + 'all_words_contribute/' + self.trait + '/' + self.cur_time + '/'
+        self.dir_all_words_contribute = self.results_dir + 'all_words_contribute/' + self.trait + '/'
 
         # top k words with highest contribute and further explanation
         self.dir_top_k_word = self.results_dir + 'top_k/' + self.trait + '/'
@@ -265,18 +265,15 @@ class CreateVocabularies:
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_documents(self):
 
-        # TODO self.calculate_kl()  # cal kl using scipy
-        # cal most significant separate words - both direction
-        # name = str(self.trait) + '_' + str(self.vertical) + '_' + 'P_' + str(self.file_name_p) + '_Q_' + str(self.file_name_q)
-
         name = 'P_' + str(self.file_name_p) + '_Q_' + str(
             self.file_name_q)
         logging.info(name)
         try:
             self.calculate_separate_words_documents(self.occurrence_doc_sum_p, self.occurrence_doc_sum_q,
-                                                self.count_vec_p.vocabulary_, self.count_vec_q.vocabulary_,
-                                                self.len_p, self.len_q, name, self.text_list_list_p,
-                                                self.text_list_list_q, self.X_dense_binary_p, self.X_dense_binary_q, name, self.file_name_p)
+                                                    self.count_vec_p.vocabulary_, self.count_vec_q.vocabulary_,
+                                                    self.len_p, self.len_q, name, self.text_list_list_p,
+                                                    self.text_list_list_q, self.X_dense_binary_p,
+                                                    self.X_dense_binary_q, name, self.file_name_p)
         except Exception as e:
             print('Exception occurred')
             print(e)
@@ -316,9 +313,9 @@ class CreateVocabularies:
 
         # calculate contribution
         for word_idx_p, tf_p in enumerate(X_p):
-
+            if word_idx_p % 1000 == 0:
+                logging.info('calculate words contribution: ' + str(word_idx_p) + ' / ' + str(len(X_p)))
             tf_p = np.float(tf_p[0]/len_p)
-            # word_p = dict_p.keys()[dict_p.values().index(word_idx_p)]
             word_p = inv_p[word_idx_p]
 
             if word_p not in dict_q:
@@ -421,22 +418,23 @@ class CreateVocabularies:
         logging.info('number of words: ' + str(len(dict_idx_contribute)))
         row_insert = 0
         for idx, tup in enumerate(dict_idx_contribute):
-            if idx % 1000 == 0:
-                logging.info(idx)
-                threshold_words = 1001
-                if idx > threshold_words:
-                    break
             cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]   # get word by index
             try:
-                sheet1.write(row_insert + 1, 0, str(cur_word))
+                sheet1.write(row_insert + 1, 0, str(cur_word.encode('utf8')))
                 sheet1.write(row_insert + 1, 1, str(tup[1]))
                 row_insert += 1
             except Exception, e:
-                logging.info('Failed : ' + str(e))
-                logging.info('Failed : ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
+                logging.info('Failed: ' + str(e))
+                logging.info('Failed: ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
                 pass
+        dir_name = self.dir_all_words_contribute + str(self.cur_time) + '_p_' + str(self.len_p) + '_q_' + \
+                   str(self.len_q) + '/'
 
-        excel_file_name = self.dir_all_words_contribute + str(self.trait) + '_' + str(file_name_p_distribution) + '.xls'
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
+        excel_file_name = dir_name + str(self.trait) + '_' + str(file_name_p_distribution) + \
+                          '_num_token_' + str(row_insert) + '.xls'
 
         logging.info('save all words contribute in file: ' + str(excel_file_name))
         book.save(excel_file_name)
@@ -561,14 +559,7 @@ class CreateVocabularies:
         logging.info('save descriptions for top-k token in file: ' + str(excel_file_name))
 
     def save_descriptions_contain_terms(self, cur_word, tf_p, tf_q, p_text_list, q_text_list):
-        '''
-        :param cur_word:
-        :param tf_p:
-        :param tf_q:
-        :param p_text_list:
-        :param q_text_list:
-        :return:
-        '''
+
         book = xlwt.Workbook(encoding="utf-8")
         sheet1 = book.add_sheet('P')
         counter_p = 0
@@ -608,27 +599,31 @@ if __name__ == '__main__':
     # extraversion
     # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_2018-06-10 06:56:45.txt'
     # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2018-06-10 06:56:45.txt'
+    # trait = 'extraversion'
 
     # openness
     # description_file_p = '../results/vocabulary/openness/documents_high_openness_2018-06-10 07:28:45.txt'
     # description_file_q = '../results/vocabulary/openness/documents_low_openness_2018-06-10 07:28:45.txt'
+    # trait = 'openness'
 
     # agreeableness
-    description_file_p = '../results/vocabulary/agreeableness/documents_high_agreeableness_2018-06-10 07:57:48.txt'
-    description_file_q = '../results/vocabulary/agreeableness/documents_low_agreeableness_2018-06-10 07:57:48.txt'
+    # description_file_p = '../results/vocabulary/agreeableness/documents_high_agreeableness_2018-06-10 07:57:48.txt'
+    # description_file_q = '../results/vocabulary/agreeableness/documents_low_agreeableness_2018-06-10 07:57:48.txt'
+    # trait = 'agreeableness'
 
     # conscientiousness
     # description_file_p = '../results/vocabulary/conscientiousness/documents_high_conscientiousness_2018-06-10 07:53:27.txt'
     # description_file_q = '../results/vocabulary/conscientiousness/documents_low_conscientiousness_2018-06-10 07:53:27.txt'
+    # trait = 'conscientiousness'
 
     # neuroticism
-    # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
-    # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
+    description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
+    description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
+    trait = 'neuroticism'
 
     log_dir = 'log/'
     results_dir = '../results/kl/'
     vocabulary_method = 'documents'    # 'documents', 'aggregation'
-    trait = 'agreeableness'    # 'agreeableness', 'extraversion', 'openness', 'conscientiousness', 'neuroticism'
     results_dir_title = trait + '_05_gap_'
     verbose_flag = True
 
