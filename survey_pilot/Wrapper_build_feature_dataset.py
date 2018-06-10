@@ -96,7 +96,7 @@ class Wrapper:
     def init_debug_log(self):
         import logging
 
-        lod_file_name = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/log/' + 'wrapper_logistic_regression' + str(self.cur_time) + '.log'
+        lod_file_name = '/Users/gelad/Personality-based-commerce/BFI_results/log/' + 'wrapper_logistic_regression' + str(self.cur_time) + '.log'
 
         # logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -679,17 +679,17 @@ if __name__ == '__main__':
     # valid_users_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/Merge all/personality_valid_users.csv'
 
     # Guy extraction
-    participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/clean_participant_695_2018-04-23 08:13:19.csv'
-    item_aspects_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/Item Aspects.csv'
-    purchase_history_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/personality_purchase_history.csv'
-    valid_users_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/personality_valid_users.csv'
+    participant_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/clean_participant_695_2018-05-13 16:54:12.csv'
+    item_aspects_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/Item Aspects.csv'
+    purchase_history_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_purchase_history.csv'
+    valid_users_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_valid_users.csv'
 
-    dir_analyze_name = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/analyze_CF/'
-    dir_logistic_results = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/'
+    dir_analyze_name = '/Users/gelad/Personality-based-commerce/BFI_results/analyze_CF/'
+    dir_logistic_results = '/Users/gelad/Personality-based-commerce/BFI_results/'
 
     dict_feature_flag = {
         'time_purchase_ratio_feature_flag': True,
-        'time_purchase_meta_feature_flag' : True,
+        'time_purchase_meta_feature_flag': True,
         'vertical_ratio_feature_flag': True,
         'purchase_percentile_feature_flag': True,
         'user_meta_feature_flag': True,

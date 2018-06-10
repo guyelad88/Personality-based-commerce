@@ -1,8 +1,9 @@
-from __future__ import print_function
-import pandas as pd
+# from __future__ import print_function
 import logging
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 
 class CleanData:
     '''
@@ -46,7 +47,7 @@ class CleanData:
     def init_debug_log(self):
         import logging
 
-        lod_file_name = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/log/' + 'clean_data_' + str(self.cur_time) + '.log'
+        lod_file_name = '../BFI_results/log/' + 'clean_data_' + str(self.cur_time) + '.log'
 
         # logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -335,9 +336,9 @@ if __name__ == '__main__':
     # dir_save_results = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/Merge all/'
 
     # participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
-    participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/merge_df_crowdflower_1425.csv'
-    valid_users_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/personality_valid_users.csv'
-    dir_save_results = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/'
+    participant_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/merge_df_crowdflower_1425.csv'
+    valid_users_file = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_valid_users.csv'
+    dir_save_results = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/'
     threshold = 0.5
     duplication_method = 'avg'  # 'avg', 'first'
     len_user_name_threshold = 4           #

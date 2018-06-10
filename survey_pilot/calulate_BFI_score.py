@@ -46,7 +46,7 @@ class CalculateScore:
     # build log object
     def init_debug_log(self):
         import logging
-        logging.basicConfig(filename='/Users/sguyelad/PycharmProjects/research/survey_pilot/log/log.log',
+        logging.basicConfig(filename='/Users/sguyelad/PycharmProjects/research/BFI_results/log/log.log',
                             filemode='a',
                             format='%(asctime)s, %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
@@ -59,9 +59,9 @@ class CalculateScore:
     # load csv and clean missing
     def load_clean_csv_results(self):
 
-        # self.df = pd.read_csv('/Users/sguyelad/PycharmProjects/research/survey_pilot/data/Personality test (BFI) - Technion 80 participant.csv')    # 14.1.18 09:00 - technion
+        # self.df = pd.read_csv('/Users/sguyelad/PycharmProjects/research/BFI_results/data/Personality test (BFI) - Technion 80 participant.csv')    # 14.1.18 09:00 - technion
 
-        self.df = pd.read_csv('/Users/sguyelad/PycharmProjects/research/survey_pilot/data/Personality test - 67 participant.csv')  # 14.1.18 09:00
+        self.df = pd.read_csv('/Users/sguyelad/PycharmProjects/research/BFI_results/data/Personality test - 67 participant.csv')  # 14.1.18 09:00
 
         '''if 'eBay email address' in list(self.df) and 'eBay email adress' in list(self.df):
             self.df['user email'] = self.df[['Username', 'eBay email address', 'eBay email adress']].apply(lambda x: ''.join(x), axis=1)
@@ -79,7 +79,7 @@ class CalculateScore:
         # self.df.rename(columns={'eBay email address': 'Username'}, inplace=True)
         self.df.rename(columns={'Email address': 'Username'}, inplace=True)
             #self.df['user email'] = self.df[['Username']].apply(lambda x: ''.join(x), axis=1)
-        #self.df.to_csv('/Users/sguyelad/PycharmProjects/research/survey_pilot/data/elad_personality_check.csv', sep='\t', encoding='utf-8')
+        #self.df.to_csv('/Users/sguyelad/PycharmProjects/research/BFI_results/data/elad_personality_check.csv', sep='\t', encoding='utf-8')
         #raise
         prev_clean_row = self.df.shape[0]
         self.df.dropna(axis=0, how='any', inplace=True)
@@ -410,7 +410,7 @@ class CalculateScore:
             msgImage.add_header('Content-ID', '<image1>')
             msgRoot.attach(msgImage)
 
-            fp = open('/Users/sguyelad/PycharmProjects/research/survey_pilot/participant_plot/trait table meaning.jpg',
+            fp = open('/Users/sguyelad/PycharmProjects/research/BFI_results/participant_plot/trait table meaning.jpg',
                       'rb')
             msgImageExplain = MIMEImage(fp.read())
             fp.close()
@@ -428,7 +428,7 @@ class CalculateScore:
             msgImagePlot.add_header('Personality plot results', '<{}>'.format(plot_file_name))
             msgRoot.attach(msgImagePlot)
 
-            fp = open('/Users/sguyelad/PycharmProjects/research/survey_pilot/participant_plot/trait table meaning.jpg', 'rb')
+            fp = open('/Users/sguyelad/PycharmProjects/research/BFI_results/participant_plot/trait table meaning.jpg', 'rb')
             msgImageExplain = MIMEImage(fp.read())
             fp.close()
 
@@ -454,7 +454,7 @@ class CalculateScore:
             </head>
             <body>
             <div>
-            <img src='/Users/sguyelad/PycharmProjects/research/survey_pilot/participant_plot/trait table meaning.jpg' alt="traits table">
+            <img src='/Users/sguyelad/PycharmProjects/research/BFI_results/participant_plot/trait table meaning.jpg' alt="traits table">
             </div>
             </body>
             </html>
@@ -566,7 +566,7 @@ class CalculateScore:
         plt.tight_layout()
         # plt.show()
 
-        plot_name = '/Users/sguyelad/PycharmProjects/research/survey_pilot/participant_plot/' + \
+        plot_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/participant_plot/' + \
                     str(row_participant['Full Name']) + '.png'
         plt.savefig(plot_name, bbox_inches='tight')
 

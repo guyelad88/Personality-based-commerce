@@ -1,11 +1,8 @@
-import gzip
 import logging
-# from lexrank import STOPWORDS, LexRank
-from summarizer import LexRank  # noqa
-from calculate_word_contribute import CalculateWordContribute
 import pandas as pd
-# from lexrank.mappings.stopwords import STOPWORDS  # noqa
-# from tests.settings import DATA_ROOT
+
+from summarizer import LexRank
+from calculate_word_contribute import CalculateWordContribute
 
 
 # Run personality-based LexRank algorithm.

@@ -39,7 +39,7 @@ class CalculateScore:
     # build log object
     def init_debug_log(self):
         import logging
-        logging.basicConfig(filename='/Users/sguyelad/PycharmProjects/research/survey_pilot/log/analyze_results.log',
+        logging.basicConfig(filename='/Users/sguyelad/PycharmProjects/research/BFI_results/log/analyze_results.log',
                             filemode='a',
                             format='%(asctime)s, %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
@@ -638,6 +638,6 @@ def main(file_name, dir_analyze_name):
 
 
 if __name__ == '__main__':
-    file_name = '/Users/sguyelad/PycharmProjects/research/survey_pilot/data/Personality test - 127 participant.csv'
-    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/survey_pilot/analyze/'
+    file_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/data/Personality test - 127 participant.csv'
+    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/analyze/'
     main(file_name, dir_analyze_name)

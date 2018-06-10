@@ -6,11 +6,25 @@ import numpy as np
 
 class CalculateBFIScore:
 
-    def __init__(self, participant_file, dir_save_results):
+    """
+    Calculate BFI score and percentile
+
+    Args:
+        participant_file: csv file contain user and his BFI test results (user per row)
+        dir_save_results: directory path to save
+
+    Returns:
+        csv: contain original data and traits value and percentile values, path of dir_save_results
+
+    Raises:
+    """
+
+    def __init__(self, participant_file, dir_save_results, verbose_flag=True):
 
         # file arguments
         self.participant_file = participant_file
         self.dir_save_results = dir_save_results
+        self.verbose_flag = verbose_flag
 
         # define data frame needed for analyzing data
         self.participant_df = pd.DataFrame()
@@ -107,14 +121,28 @@ class CalculateBFIScore:
             'neuroticism': 0.0
         }
 
+        self.cur_time = None
+
     # build log object
     def init_debug_log(self):
         import logging
-        logging.basicConfig(filename='/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/log/analyze_results.log',
+
+        from time import gmtime, strftime
+        self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        log_dir = 'log/'
+        log_file_name = log_dir + 'extract_BFI_score_' + str(self.cur_time) + '.log'
+
+        logging.basicConfig(filename=log_file_name,
                             filemode='a',
                             format='%(asctime)s, %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
+                            level=logging.INFO)
+
+        # print result in addition to log file
+        if self.verbose_flag:
+            stderrLogger = logging.StreamHandler()
+            stderrLogger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+            logging.getLogger().addHandler(stderrLogger)
 
         logging.info("")
         logging.info("")
@@ -122,96 +150,27 @@ class CalculateBFIScore:
 
     # load csv into df
     def load_clean_csv_results(self):
-
         self.participant_df = pd.read_csv(self.participant_file)
 
-        '''
-        import matplotlib.pyplot as plt
-        # d = pd.Series(data=np.random.rand(10), index=range(10))
-        a = list(self.participant_df['Nationality'])
-
-        from collections import Counter
-        # a = ['a', 'a', 'a', 'a', 'b', 'b', 'c', 'c', 'c', 'd', 'e', 'e', 'e', 'e', 'e']
-        letter_counts = Counter(a)
-        df = pd.DataFrame.from_dict(letter_counts, orient='index').sort_index()
-        df.plot(kind='bar')
-        plt.xticks(rotation=70)
-        plt.show()
-        raise'''
-
-        return
-
+    # extract valid user_name only - currently not in use
     def clean_df(self):
 
         return
-
-        '''
-        # use only valid user id
-        tmp_valid_user_list = list(self.valid_users_df['USER_SLCTD_ID'])
-        self.valid_user_list = [x for x in tmp_valid_user_list if str(x) != 'nan']
-        '''
-
         # extract only valid user name
         for (idx, row_participant) in self.participant_df.iterrows():
             lower_first_name = row_participant['eBay site user name'].lower()
-            self.participant_df.set_value(idx, 'eBay site user name', lower_first_name)
+            self.participant_df.at(idx, 'eBay site user name', lower_first_name)
 
         self.participant_df = self.participant_df[self.participant_df['eBay site user name'].isin(self.valid_user_list)]
 
-        return
-
-    # reverse all relevant values
+    # reverse all relevant question values
     def change_reverse_value(self):
         reverse_col = [2, 6, 8, 9, 12, 18, 21, 23, 24, 27, 31, 34, 35, 37, 41, 43]
         for cur_rcol in reverse_col:
             start_str_cur = str(cur_rcol) + '.'
             filter_col = [col for col in self.participant_df if col.startswith(start_str_cur)][0]
-            # print(filter_col)
             logging.info('Change column values (reverse mode): ' + str(filter_col))
             self.participant_df[filter_col] = self.participant_df[filter_col].apply(lambda x: 6 - x)
-        return
-
-    # calculate traits values for one participant
-    def calculate_individual_score(self, idx, row_participant):
-
-        op_trait = self.cal_participant_traits(row_participant, self.question_openness,
-                                                     self.ratio_hundred_openness)
-
-        self.participant_df.set_value(idx, 'openness_trait', op_trait)
-        self.openness_score_list.append(op_trait)
-
-        co_trait = self.cal_participant_traits(row_participant, self.question_conscientiousness,
-                                                              self.ratio_hundred_conscientiousness)
-        self.participant_df.set_value(idx, 'conscientiousness_trait', co_trait)
-        self.conscientiousness_score_list.append(co_trait)
-
-        ex_trait = self.cal_participant_traits(row_participant, self.question_extraversion,
-                                                         self.ratio_hundred_extraversion)
-        self.participant_df.set_value(idx, 'extraversion_trait', ex_trait)
-        self.extraversion_score_list.append(ex_trait)
-
-        ag_trait = self.cal_participant_traits(row_participant, self.question_agreeableness,
-                                                          self.ratio_hundred_agreeableness)
-        self.participant_df.set_value(idx, 'agreeableness_trait', ag_trait)
-        self.agreeableness_score_list.append(ag_trait)
-
-        ne_trait = self.cal_participant_traits(row_participant, self.question_neuroticism,
-                                                        self.ratio_hundred_neuroticism)
-        self.participant_df.set_value(idx, 'neuroticism_trait', ne_trait)
-        self.neuroticism_score_list.append(ne_trait)
-
-        # a (15-24), b (25-29), c(30-34), d(35-39), e(40-100)
-        if row_participant['Age'] <= 24:
-            self.participant_df.set_value(idx, 'age_group', 'a')
-        elif row_participant['Age'] <= 29:
-            self.participant_df.set_value(idx, 'age_group', 'b')
-        elif row_participant['Age'] <= 34:
-            self.participant_df.set_value(idx, 'age_group', 'c')
-        elif row_participant['Age'] <= 39:
-            self.participant_df.set_value(idx, 'age_group', 'd')
-        else:
-            self.participant_df.set_value(idx, 'age_group', 'e')
-        return
 
     # calculate traits valuers and percentile per participant
     def cal_participant_traits_values(self):
@@ -227,71 +186,80 @@ class CalculateBFIScore:
         self.participant_df["extraversion_percentile"] = np.nan
         self.participant_df["agreeableness_percentile"] = np.nan
         self.participant_df["neuroticism_percentile"] = np.nan
-        self.participant_df["age_group"] = ''  # a (15-24), b (25-29), c(30-34), d(35-39), e(40-100)
 
         # add average traits columns
         for (idx, row_participant) in self.participant_df.iterrows():
             logging.info('Calculate traits value for participant: ' + str(row_participant['Email address']))
-            self.calculate_individual_score(idx, row_participant)
+            self._calculate_individual_score(idx, row_participant)
 
         # add percentile traits columns
         for (idx, row_participant) in self.participant_df.iterrows():
             logging.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
-            self.cal_participant_traits_percentile_values(idx, row_participant)
-
-        # after calculate traits score+percentile extract only relevant features
-        '''remain_feature_list = ['Full Name', 'Gender', 'eBay site user name', 'Age', 'openness_trait',
-                               'conscientiousness_trait', 'extraversion_trait', 'agreeableness_trait',
-                               'neuroticism_trait', 'openness_percentile', 'conscientiousness_percentile',
-                               'extraversion_percentile', 'agreeableness_percentile', 'neuroticism_percentile',
-                               'age_group']'''
+            self._cal_participant_traits_percentile_values(idx, row_participant)
 
         self.merge_df = self.participant_df.copy()
 
-        # self.merge_df.to_csv('/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/' +
-        #                     'merge_df_crowdflower_' + str(self.merge_df.shape[0]) + '.csv')
-        output_file = dir_save_results + 'merge_df_crowdflower_' + str(self.merge_df.shape[0]) + '.csv'
+        import os
+        dir_path = self.dir_save_results + '/participant_bfi_score/'
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        output_file = dir_path + 'users_with_bfi_score_amount_' + str(self.merge_df.shape[0]) + '.csv'
         self.merge_df.to_csv(output_file)
         logging.info('save BFI score into file: ' + str(output_file))
-        # self.merge_df = self.participant_df[remain_feature_list].copy()
 
-        return
+    # calculate traits values for one participant
+    def _calculate_individual_score(self, idx, row_participant):
+
+        op_trait = self.cal_participant_traits(row_participant, self.question_openness, self.ratio_hundred_openness)
+
+        self.participant_df.at[idx, 'openness_trait'] = op_trait
+        self.openness_score_list.append(op_trait)
+
+        co_trait = self.cal_participant_traits(row_participant, self.question_conscientiousness,
+                                               self.ratio_hundred_conscientiousness)
+        self.participant_df.at[idx, 'conscientiousness_trait'] = co_trait
+        self.conscientiousness_score_list.append(co_trait)
+
+        ex_trait = self.cal_participant_traits(row_participant, self.question_extraversion,
+                                               self.ratio_hundred_extraversion)
+        self.participant_df.at[idx, 'extraversion_trait'] = ex_trait
+        self.extraversion_score_list.append(ex_trait)
+
+        ag_trait = self.cal_participant_traits(row_participant, self.question_agreeableness,
+                                               self.ratio_hundred_agreeableness)
+        self.participant_df.at[idx, 'agreeableness_trait'] = ag_trait
+        self.agreeableness_score_list.append(ag_trait)
+
+        ne_trait = self.cal_participant_traits(row_participant, self.question_neuroticism,
+                                               self.ratio_hundred_neuroticism)
+
+        self.participant_df.at[idx, 'neuroticism_trait'] = ne_trait
+        self.neuroticism_score_list.append(ne_trait)
 
     # after delete un valid participant
-    def cal_all_participant_percentile_value(self):
+    def _cal_all_participant_percentile_value(self):
         for (idx, row_participant) in self.participant_df.iterrows():
             logging.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
-            self.cal_participant_traits_percentile_values(idx, row_participant)
-
-            # after calculate traits score+percentile extract only relevant features
-        remain_feature_list = ['Full Name', 'Gender', 'eBay site user name', 'Age', 'openness_trait',
-                               'conscientiousness_trait', 'extraversion_trait', 'agreeableness_trait',
-                               'neuroticism_trait', 'openness_percentile', 'conscientiousness_percentile',
-                               'extraversion_percentile', 'agreeableness_percentile', 'neuroticism_percentile',
-                               'age_group']
-
-        # self.merge_df = self.merge_df[remain_feature_list].copy()
-        return
+            self._cal_participant_traits_percentile_values(idx, row_participant)
 
     # calculate percentile value for one participant
-    def cal_participant_traits_percentile_values(self, idx, participant_score):
+    def _cal_participant_traits_percentile_values(self, idx, participant_score):
 
         op_per = float(sum(i < participant_score['openness_trait'] for i in self.openness_score_list))/float(len(self.openness_score_list)-1)
-        self.participant_df.set_value(idx, 'openness_percentile', op_per)
+        self.participant_df.at[idx, 'openness_percentile'] = op_per
         co_per = float(sum(
             i < participant_score['conscientiousness_trait'] for i in self.conscientiousness_score_list))/float(len(self.conscientiousness_score_list)-1)
-        self.participant_df.set_value(idx, 'conscientiousness_percentile', co_per)
+        self.participant_df.at[idx, 'conscientiousness_percentile'] = co_per
         ex_per = float(sum(
             i < participant_score['extraversion_trait'] for i in self.extraversion_score_list))/float(len(self.extraversion_score_list)-1)
-        self.participant_df.set_value(idx, 'extraversion_percentile', ex_per)
+        self.participant_df.at[idx, 'extraversion_percentile'] = ex_per
         ag_per = float(sum(
             i < participant_score['agreeableness_trait'] for i in self.agreeableness_score_list))/float(len(self.agreeableness_score_list)-1)
-        self.participant_df.set_value(idx, 'agreeableness_percentile', ag_per)
+        self.participant_df.at[idx, 'agreeableness_percentile'] = ag_per
         ne_per = float(sum(
             i < participant_score['neuroticism_trait'] for i in self.neuroticism_score_list))/float(len(self.neuroticism_score_list)-1)
-        self.participant_df.set_value(idx, 'neuroticism_percentile', ne_per)
-
-        return
+        self.participant_df.at[idx, 'neuroticism_percentile'] = ne_per
 
     # calculate average traits value
     def cal_participant_traits(self, row, cur_trait_list, ratio):
@@ -304,10 +272,11 @@ class CalculateBFIScore:
         return trait_val
 
     def investigate_duplication(self):
-        '''
+        """
         check duplication and the difference in results
+        TODO delete users and save only relevant users results
         :return:
-        '''
+        """
         count_dup = 0
         dup_group = self.participant_df.groupby(['Email address'])
         # dup_group = self.participant_df.groupby(['eBay site user name'])#['Email address'])
@@ -315,18 +284,17 @@ class CalculateBFIScore:
         for email_name, group in dup_group:
             if group.shape[0] > 1:
                 count_dup += 1
-                print(email_name)
+                logging.info(email_name)
                 for (idx, row_participant) in group.iterrows():
-                    print(row_participant['eBay site user name'])
-                    print(list(row_participant[['openness_trait', 'conscientiousness_trait', 'extraversion_trait',
+                    logging.info(row_participant['eBay site user name'])
+                    logging.info(list(row_participant[['openness_trait', 'conscientiousness_trait', 'extraversion_trait',
                                                 'agreeableness_trait', 'neuroticism_trait', 'openness_percentile',
                                                 'conscientiousness_percentile',	'extraversion_percentile',
                                                 'agreeableness_percentile',	'neuroticism_percentile']]))
 
-                print('')
+                logging.info('')
 
-        print('Number of duplication: ' + str(count_dup))
-        return
+        logging.info('Number of duplication: ' + str(count_dup))
 
 
 def main(participant_file, dir_save_results):
@@ -339,14 +307,14 @@ def main(participant_file, dir_save_results):
     calculate_obj.change_reverse_value()                # change specific column into reverse mode
     calculate_obj.cal_participant_traits_values()       # calculate average traits and percentile value
 
-    calculate_obj.investigate_duplication()             #
+    # after I saved the file with percentile value
+    calculate_obj.investigate_duplication()
+
 
 if __name__ == '__main__':
 
     # input file name
-    # participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/crowdflower data/Personality test (BFI) - Crowdflower 113 participant.csv'
-    # participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/merge_df_crowdflower_145.csv'
-    participant_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
-    dir_save_results = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/participant_data/1425 users input/'
+    participant_file = '../data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
+    dir_save_results = '../results/BFI_results/'
 
     main(participant_file, dir_save_results)

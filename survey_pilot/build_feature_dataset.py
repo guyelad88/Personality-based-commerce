@@ -188,7 +188,7 @@ class CalculateScore:
     def init_debug_log(self):
         import logging
 
-        lod_file_name = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/survey_pilot/log/' + 'clean_data_' + str(self.cur_time) + '.log'
+        lod_file_name = '/Users/gelad/Personality-based-commerce/BFI_results/log/' + 'build_feature_dataset_' + str(self.cur_time) + '.log'
 
         # logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -1885,7 +1885,7 @@ if __name__ == '__main__':
     item_aspects_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_item_aspects.csv'
     purchase_history_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_purchase_history.csv'
     valid_users_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_valid_users.csv'
-    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/survey_pilot/analyze_pic/'
+    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/analyze_pic/'
     threshold_purchase = 30
     c_value = 2
     regularization = 'l1'  # 'l2'

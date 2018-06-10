@@ -8,9 +8,42 @@ import pandas as pd
 # aggregate all text together
 class CreateVocabularies:
 
+    """
+    Create descriptions vocabulary regards to: vertical / traits / vertical + traits
+    Save the two groups in csv files using pickle package
+
+    Args:
+        description_file: csv with clean description (extract from HTML)
+        log_dir: where to save log file
+        directory_output: dir to save groups excels
+        split_method: split descriptions using trait/vertical/both
+        gap_value: gap determine to choose users percentile threshold  - e.g. 0.5 --> val<0.25 or val>0.75
+        vocabulary_method: output vocabulary separate by item description ('description') / merge all ('aggregate')
+        verbose_flag: whether print log to console
+
+        # default arguments (optional)
+
+        participants_survey_data=None: TODO
+        participants_ebay_mapping_file=None: TODO
+        participants_purchase_history=None: TODO
+
+        personality_trait=None: which traits to split by
+        vertical=None: which vertical to split by
+        cur_time=None: time (embed to output file/log) - easy to recognize later
+
+    Returns:
+        csv: contain original data and traits value and percentile values, path of dir_save_results
+             results/vocabulary/trait_name/____.txt
+
+    Raises:
+        gap value isn't float between 0-1.
+        vertical | trait isn't valud name
+        split methods not defined
+    """
+
     def __init__(self, description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method,
                  verbose_flag, participants_survey_data=None, participants_ebay_mapping_file=None,
-                 participants_purchase_history=None, personality_trait=None, vertical=None, cur_time = None):
+                 participants_purchase_history=None, personality_trait=None, vertical=None, cur_time=None):
 
         self.description_file = description_file    # description file
         self.log_dir = log_dir                      # log directory
@@ -73,24 +106,21 @@ class CreateVocabularies:
     def check_input(self):
 
         if self.split_method not in ['vertical', 'traits', 'traits_vertical']:
-            raise('split method: ' + str(self.split_method) + ' is not defined')
+            raise ValueError('split method: ' + str(self.split_method) + ' is not defined')
 
         if self.vocabulary_method not in ['documents', 'aggregation']:
-            raise('vocabulary method: ' + str(self.vocabulary_method) + ' is not definedu')
+            raise ValueError('vocabulary method: ' + str(self.vocabulary_method) + ' is not defined')
 
         if self.gap_value > 1 or self.gap_value < 0:
-            raise('gap value must be between zero to one')
+            raise ValueError('gap value must be between zero to one')
 
         import os
         if not os.path.exists(self.directory_output):
             os.makedirs(self.directory_output)
 
-        self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/'
-        if not os.path.exists(self.dir_vocabulary_name):
-            os.makedirs(self.dir_vocabulary_name)
+        # self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/'
 
-        self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/' + \
-                                   str(self.personality_trait) + '_' + str(self.vertical) + '/'
+        self.dir_vocabulary_name = self.directory_output + str(self.personality_trait) + '/'
         if not os.path.exists(self.dir_vocabulary_name):
             os.makedirs(self.dir_vocabulary_name)
 
@@ -326,7 +356,7 @@ class CreateVocabularies:
     def save_vocabulary(self, vertical_name, cur_vocabulary):
 
         group_file_name = str(self.dir_vocabulary_name) + str(self.vocabulary_method) + '_' \
-                          + str(vertical_name) + '.txt'
+                          + str(vertical_name) + '_' + str(self.cur_time) + '.txt'
 
         # text_file = open(group_file_name, "w")
         # text_file.write(cur_vocabulary)
@@ -355,30 +385,32 @@ def main(description_file, log_dir, directory_output, split_method, gap_value, v
     create_vocabularies_obj.check_input()                       # check if arguments are valid
     create_vocabularies_obj.load_descriptions()                 # load description file
     create_vocabularies_obj.create_vocabulary_by_method()       # build model in regard to vertical/trait
-    # create_vocabularies_obj.vertical_split_item_into_groups()   # split items into groups by vertical
+    # create_vocabularies_obj.vertical_split_item_into_groups() # split items into groups by vertical
 
 
 if __name__ == '__main__':
 
-    # item and hist description file
-
-    # description_file = '/Users/sguyelad/PycharmProjects/research/kl/descriptions/num_items_447_2018-01-25 12-20-46.csv'
-    # description_file = '/Users/sguyelad/PycharmProjects/research/kl/descriptions/num_items_1554_2018-01-29 14:20:27.csv'
-
-    description_file = 'descriptions/num_items_1552_2018-01-30 13:15:33.csv'
+    # description_file = 'descriptions/num_items_1552_2018-01-30 13:15:33.csv'        # html clean description
+    description_file = '../data/descriptions_data/1425 users input/clean_13430.csv'   # html clean description
     log_dir = 'log/'
-    directory_output = 'vocabulary/'
-    vocabulary_method = 'documents'     # 'documents', 'aggregation'
+    directory_output = '../results/vocabulary/'
+    vocabulary_method = 'documents'         # 'documents', 'aggregation'
     verbose_flag = True
-    split_method = 'traits_vertical'     # 'vertical', 'traits', 'traits_vertical'
-    gap_value = 0.5             # must be a float number between zero to one
+    split_method = 'traits'                 # 'vertical', 'traits', 'traits_vertical'
+    gap_value = 0.5                         # must be a float number between zero to one
 
     # needed if split_method is traits
-    participants_survey_data = '../data/participant_data/participant_threshold_20_features_extraction.csv'  # users with more than 20 purchases
-    participants_ebay_mapping_file = '../data/participant_data/personality_valid_users.csv'
-    participants_purchase_history = '../data/participant_data/personality_purchase_history.csv'
-    personality_trait = 'conscientiousness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
-    vertical = 'Fashion'
+
+    # participants_survey_data = '../data/participant_data/participant_threshold_20_features_extraction.csv'  # users with more than 20 purchases
+    # participants_ebay_mapping_file = '../data/participant_data/personality_valid_users.csv'
+    # participants_purchase_history = '../data/participant_data/personality_purchase_history.csv'
+
+    participants_survey_data = '../data/participant_data/1425 users input/participant_bfi_score/users_with_bfi_score_amount_1425.csv'
+    participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
+    participants_purchase_history = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
+
+    personality_trait = 'openness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
+    vertical = ''   # 'Fashion'
 
     main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,
          participants_survey_data, participants_ebay_mapping_file, participants_purchase_history, personality_trait, vertical)

@@ -313,7 +313,7 @@ if __name__ == '__main__':
     item_aspects_file = '/Users/sguyelad/PycharmProjects/research/data/analyze_data/personality_item_aspects.csv'
     purchase_history_file = '/Users/sguyelad/PycharmProjects/research/data/analyze_data/personality_purchase_history.csv'
     valid_users_file = '/Users/sguyelad/PycharmProjects/research/data/analyze_data/personality_valid_users.csv'
-    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/survey_pilot/analyze_pic/'
+    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/analyze_pic/'
 
 
     main(participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name)
