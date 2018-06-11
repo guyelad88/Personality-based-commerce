@@ -339,7 +339,7 @@ if __name__ == '__main__':
         'min': 15,
         'max': 23
     }
-    corpus_size = 100  # 'max'          # limit idf computation time
+    corpus_size = 100  # 'max'          # TODO be careful using this value - limit idf computation time
     # please don't change (damping factor=1 same effect)
     personality_word_flag = True
     random_walk_flag = True                         # flag if combine random jump between sentences

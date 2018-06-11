@@ -24,10 +24,12 @@ class FilterDescription:
 
         :return: save description ./data/description_data/.../clean_#description.csv
     """
-    def __init__(self):
+    def __init__(self, description_file, output_dir):
         self.verbose_flag = True
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.log_dir = 'log/'
+        self.description_file = description_file
+        self.output_dir = output_dir
 
     def init_debug_log(self):
 
@@ -48,8 +50,8 @@ class FilterDescription:
         logging.info("")
 
     def filter_descriptions(self):
-        description_file = '../data/descriptions_data/1425 users input/merge_20048.csv'
-        description_df = pd.read_csv(description_file)
+        """ main function clean description """
+        description_df = pd.read_csv(self.description_file)
 
         # drop na
         if DROP_NA:
@@ -76,6 +78,7 @@ class FilterDescription:
             except Exception as e:
                 print('exception found: ' + str(e))
 
+        # before clean description store histogram of their length
         plt.style.use('seaborn-deep')
         plt.xlim(0, 1000)
         plt.hist(description_df['description_length'], bins=1000)
@@ -101,7 +104,12 @@ class FilterDescription:
             self.calc_lost_ratio(before, description_df.shape[0], 'non english descriptions')
 
         description_df = description_df[['item_id', 'description']]
-        file_path = '../data/descriptions_data/1425 users input/clean_' + str(description_df.shape[0]) + '.csv'
+
+        import os
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        file_path = output_dir + 'clean_' + str(description_df.shape[0]) + '.csv'
         description_df.to_csv(file_path, encoding='utf-8', index=False)
         logging.info('save file: ' + str(file_path))
 
@@ -214,12 +222,14 @@ class FilterDescription:
     """
 
 
-def main():
+def main(description_file, output_dir):
 
-    filter_desc_obj = FilterDescription()
+    filter_desc_obj = FilterDescription(description_file, output_dir)
     filter_desc_obj.init_debug_log()
     filter_desc_obj.filter_descriptions()
 
 
 if __name__ == '__main__':
-    main()
+    description_file = '../data/descriptions_data/1425 users input/merge_20048.csv'
+    output_dir = '../data/descriptions_data/1425 users input/'
+    main(description_file, output_dir)

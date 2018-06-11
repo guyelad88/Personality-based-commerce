@@ -130,21 +130,32 @@ class CalculateWordContribute:
 
     def _save_word_contribute(self):
         """insert all token in ascending order regards to their contribution to user personality"""
+        self.logging.info('')
+        self.logging.info('save all word contribution with additional data')
         import operator
         # sort in ascending contribution order
         list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
         list_word_contribute_sort.reverse()
 
-        df = pd.DataFrame(columns=['word', 'contribution', 'num_trait', 'trait_values'])
+        df = pd.DataFrame(columns=[['word', 'contribution', 'num_trait', 'trait_values']])
 
+        cnt = 0
         # insert token one-by-one
         for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
-            df = df.append({
-                'word': word_cont_tuple[0],
-                'contribution': word_cont_tuple[1],
-                'num_trait': self.meta_word_count[word_cont_tuple[0]],
-                'trait_values':str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
-            }, ignore_index=True)
+            try:
+                df = df.append({
+                    'word': word_cont_tuple[0],
+                    'contribution': word_cont_tuple[1],
+                    'num_trait': self.meta_word_count[word_cont_tuple[0]],
+                    'trait_values': str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
+                }, ignore_index=True)
+                cnt += 1
+                if cnt % 1000 == 0:
+                    self.logging.info('add token with informative data: ' + str(cnt) + ' / ' + str(len(list_word_contribute_sort)))
+            except Exception as e:
+                self.logging.info('exception word: ' + str(word_cont_tuple))
+                self.logging.info(e)
+                self.logging.info(e.message)
 
         dir_name = '../results/lexrank/personality_word_contribution/'
 
