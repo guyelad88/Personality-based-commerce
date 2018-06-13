@@ -85,13 +85,8 @@ class ExtractDescriptions:
                 continue
 
             count_id += 1
-            # limit number of output descriptions
-            # if count_id > 10:
-            #     break
 
             logging.info("Count: " + str(count_id) + ", Item id: " + str(item_id))
-            # url = "http://news.bbc.co.uk/2/hi/health/2284783.stm"
-            # html = urllib.urlopen(url).read()
             soup = BeautifulSoup(description_string)
 
             # kill all script and style elements
@@ -100,6 +95,27 @@ class ExtractDescriptions:
 
             # get text
             text = soup.get_text()
+
+            # remove more HTML which remain after soup cleaning
+            from HTMLParser import HTMLParser
+
+            class MLStripper(HTMLParser):
+                def __init__(self):
+                    self.reset()
+                    self.fed = []
+
+                def handle_data(self, d):
+                    self.fed.append(d)
+
+                def get_data(self):
+                    return ''.join(self.fed)
+
+            s = MLStripper()
+            s.feed(text)
+            text = s.get_data()
+
+            # remove non-ascii characters
+            text = ''.join([i if ord(i) < 128 else ' ' for i in text])
 
             # break into lines and remove leading and trailing space on each
             lines = (line.strip() for line in text.splitlines())
@@ -110,9 +126,7 @@ class ExtractDescriptions:
 
             text.encode('utf-8')
             text.replace('\n', ' ')
-            '''text = lambda s: text.decode('utf8', 'ignore')
-            text.replace('\xc2', ' ')
-            text.replace('\xa0', ' ')'''
+
             self.item_text_dict[item_id] = text.encode('utf-8')
         return
 
