@@ -14,7 +14,7 @@ class ExtractDescriptionFromAmazon:
         self.amazon_crawl_path_3 = amazon_crawl_path_3
 
         # self.file_path_list = [self.amazon_crawl_path_3, self.amazon_crawl_path_2, self.amazon_crawl_path]
-        self.file_path_list = [self.amazon_crawl_path]  # files to parse
+        self.file_path_list = [self.amazon_crawl_path_2]  # files to parse
 
         self.log_dir = 'log/'
         self.verbose_flag = True
@@ -126,6 +126,6 @@ def main(amazon_crawl_data, amazon_crawl_data_2, amazon_crawl_data_3):
 # TODO change to CSV files for better performance
 if __name__ == '__main__':
     amazon_crawl_data = '../data/amazon_description/amazon-crawl-output.csv'
-    amazon_crawl_data_2 = ''    # '../data/amazon_description/amazon-crawl-output-2.xlsx'
-    amazon_crawl_data_3 = ''    # '../data/amazon_description/amazon-crawl-output-3.xlsx'
+    amazon_crawl_data_2 = '../data/amazon_description/amazon-crawl-output-2.csv'    # '../data/amazon_description/amazon-crawl-output-2.xlsx'
+    amazon_crawl_data_3 = '../data/amazon_description/amazon-crawl-output-3.csv'    # '../data/amazon_description/amazon-crawl-output-3.xlsx'
     main(amazon_crawl_data, amazon_crawl_data_2, amazon_crawl_data_3)

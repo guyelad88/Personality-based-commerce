@@ -214,8 +214,11 @@ class WrapperLexRank:
                     or len(target_sentences) < self.target_sentences_length['min']:     # control amount of sentences
                 continue
 
-            # if desc_id != 'B00J00X5YO':
-            #    continue
+            if desc_id != 'B002C30S96':
+                continue
+            else:
+                print(len(target_sentences))
+                print('wwwwwwwwwwwww')
 
             # define summarization length
             if self.summary_size == 'max':
@@ -327,26 +330,28 @@ if __name__ == '__main__':
     # run LexRank algorithm
     corpus_path_file = '../data/descriptions_data/1425 users input/merge_20048.csv'  # calculate idf from
     trait_word_contribute_folder = '../results/kl/all_words_contribute/'
-    target_item_description_file = '../data/amazon_description/amazon_892.csv'  # load clean description
+    # target_item_description_file = '../data/amazon_description/amazon_892.csv'  # load clean description
+    # target_item_description_file = '../data/amazon_description/amazon_40.csv'  # load clean description
+    target_item_description_file = '../data/amazon_description/amazon_949.csv'  # load clean description
 
     log_dir = 'log/'
     html_dir = '../results/lexrank/html/'
     summary_size = 10             # summarization length - 'max' or int
     threshold = 0.03             # min edge weight between two sentences
-    damping_factor = 0.01        # probability not to jump
-    summarization_similarity_threshold = 0.3
+    damping_factor = 0.8        # probability not to jump
+    summarization_similarity_threshold = 0.4
     target_sentences_length = {
-        'min': 15,
-        'max': 23
+        'min': 0,
+        'max': 100
     }
     corpus_size = 100  # 'max'          # TODO be careful using this value - limit idf computation time
     # please don't change (damping factor=1 same effect)
     personality_word_flag = True
     random_walk_flag = True                         # flag if combine random jump between sentences
 
-    multi_document_summarization = 'single'         # summarization method for single/multi documents
-    lex_rank_algorithm_version = 'personality-based-LexRank'    # 'vanilla-LexRank', 'personality-based-LexRank'
-    summarization_version = 'top_relevant'                      # 'top_relevant', 'Bollegata', 'Shahaf'
+    multi_document_summarization = 'single'             # summarization method for single/multi documents
+    lex_rank_algorithm_version = 'personality-based-LexRank'      # 'vanilla-LexRank', 'personality-based-LexRank'
+    summarization_version = 'top_relevant'              # 'top_relevant', 'Bollegata', 'Shahaf'
 
     # current user personality - 'H'\'L'\'M' (high\low\miss(or mean))
     personality_trait_dict = {

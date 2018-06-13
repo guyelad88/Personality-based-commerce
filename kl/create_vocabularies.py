@@ -391,7 +391,8 @@ def main(description_file, log_dir, directory_output, split_method, gap_value, v
 if __name__ == '__main__':
 
     # description_file = 'descriptions/num_items_1552_2018-01-30 13:15:33.csv'        # html clean description
-    description_file = '../data/descriptions_data/1425 users input/clean_13430.csv'   # html clean description
+    # description_file = '../data/descriptions_data/1425 users input/clean_13430.csv'   # html clean description
+    description_file = '../data/descriptions_data/1425 users input/clean_9405.csv'  # html clean description
     log_dir = 'log/'
     directory_output = '../results/vocabulary/'
     vocabulary_method = 'documents'         # 'documents', 'aggregation'
@@ -409,7 +410,7 @@ if __name__ == '__main__':
     participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
     participants_purchase_history = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
 
-    personality_trait = 'agreeableness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
+    personality_trait = 'openness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
     vertical = ''   # 'Fashion'
 
     main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,

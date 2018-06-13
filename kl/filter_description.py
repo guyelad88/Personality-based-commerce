@@ -7,7 +7,7 @@ from time import gmtime, strftime
 from langdetect import detect_langs
 
 MAX_LENGTH = 500
-MIN_LENGTH = 5
+MIN_LENGTH = 15
 
 DROP_NA = True
 DROP_MIN = True
@@ -118,108 +118,6 @@ class FilterDescription:
         ratio = float(after_size)/float(before_size)
         logging.info('drop ' + str(before_size) + ' - ' + str(after_size) + ', deleted ratio: ' +
                      str(1-round(ratio, 3)) + '%' + ', reason: ' + str(reason))
-
-    """
-        def check_num_dup(self):
-
-        # HTML clean
-        desc_1 = '/Users/gelad/Personality-based-commerce/kl/descriptions_clean/num_items_8704_2018-04-29 06:53:42.csv'
-        desc_2 = '/Users/gelad/Personality-based-commerce/kl/descriptions_clean/num_items_11344_2018-04-29 07:00:12.csv'
-
-        purchase_id = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/purchase_id_70451.csv'        # only item_id column
-        purchase_history = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_purchase_history.csv'        # all purchase data contain item_id column
-        purchase_history_new = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/Purchase History format item_id.csv'
-
-        purchase_history_xltx = '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/Purchase History.xltx'
-        desc_1_df = pd.read_csv(desc_1)     # Arnon HTML 1
-        desc_2_df = pd.read_csv(desc_2)     # Arnon HTML 2
-
-
-
-        purchase_history_df = pd.read_csv(purchase_history)
-        purchase_history_df_new = pd.read_csv(purchase_history_new)
-        # purchase_history_df = pd.read_excel(purchase_history)
-        p_id_df = pd.read_csv(purchase_id)
-
-        desc_big_df = desc_1_df.append(desc_2_df, ignore_index=True)    # All Arnon HTML (1+2 parts)
-        num_desc = desc_big_df.shape[0]
-        desc_big_df.to_csv('/Users/gelad/Personality-based-commerce/data/descriptions_data/1425 users input/merge_' +
-                           str(num_desc) + '.csv',
-                           encoding='utf-8',
-                           index=False)
-
-        return
-
-        item_id_purchase_history_df = purchase_history_df['item_id'].tolist()     # purchase history with items_id
-        item_id_3 = p_id_df['3211273377'].tolist()                  # list of purchase history item_id I gave to Arnon
-        item_id_html = desc_big_df['item_id'].tolist()              # all descriptions item id from Arnon file
-
-        item_id_purchase_history_df.sort()
-        item_id_html.sort()
-        item_id_3.sort()
-
-        # item_id_2 = [(i/1000000)*1000000 for i in item_id_2]
-        # item_id_1 = [int(i) for i in item_id_1]
-
-        for idx, row in desc_big_df.iterrows():     # HTML
-            if str(row['item_id']).startswith('292413'):
-                print('')
-                print('')
-                print(row['item_id'])
-                print(row['description'])
-
-        print('')
-        print('******html******')
-        print('')
-        for idx, row in purchase_history_df.iterrows():  # history item_id
-            if str(int(row['item_id'])).startswith('292413'):
-                print('')
-                print(row['item_id'])
-                print(row['AUCT_TITL'])
-
-        print('')
-        print('******html new******')
-        print('')
-        for idx, row in purchase_history_df_new.iterrows():  # history item_id
-            if str(int(row['item_id'])).startswith('292413'):
-                print('')
-                print(row['item_id'])
-                print(float(row['item_id']))
-                print(int(row['item_id']))
-                print(row['AUCT_TITL'])
-        return
-
-
-        for idx, item_id in enumerate(item_id_html):    # html item_id
-            if str(item_id).startswith('292413'):
-                print(idx)
-                print(int(idx))
-                print(item_id)
-
-        print('******')
-        for idx, item_id in enumerate(item_id_purchase_history_df):  # history item_id
-            if str(int(item_id)).startswith('292413'):
-                print(idx)
-                print(int(item_id))
-                print(float(item_id))
-        return
-
-        hit = 0
-        miss = 0
-        for item_id in item_id_1:       # Arnon items
-            if item_id in item_id_html:    # history item_id
-                print(item_id)
-                hit +=1
-                # print('hit')
-            else:
-                miss += 1
-                # print('miss')
-
-        print('hit: ' + str(hit))
-        print('miss: ' + str(miss))
-
-        return
-    """
 
 
 def main(description_file, output_dir):

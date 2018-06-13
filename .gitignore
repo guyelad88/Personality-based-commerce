@@ -1,5 +1,6 @@
 # file extension
 
+*.txt
 *.csv
 *.xls
 *.html

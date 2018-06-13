@@ -107,10 +107,14 @@ class CalculateWordContribute:
         self.logging.info('')
         self.logging.info('word most associated with user personality:')
         for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
-            if w_i >= top_show:
-                break
-            line = self.get_line(w_i, word_cont_tuple)
-            self.logging.info(line)
+            try:
+                if w_i >= top_show:
+                    break
+                line = self.get_line(w_i, word_cont_tuple)
+                self.logging.info(line)
+            except:
+                print('dkfd')
+                pass
 
         list_word_contribute_sort.reverse()
         self.logging.info('')
@@ -128,9 +132,14 @@ class CalculateWordContribute:
                 str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
         return line
 
-    def _save_word_contribute(self):
+    def _save_word_contribute(self, save_all=False):
         """insert all token in ascending order regards to their contribution to user personality"""
+
         self.logging.info('')
+        if not save_all:
+            self.logging.info('SKIP!!!! - save all word contribution with additional data - flag set to false')
+            return
+
         self.logging.info('save all word contribution with additional data')
         import operator
         # sort in ascending contribution order

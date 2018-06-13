@@ -12,6 +12,7 @@ from time import gmtime, strftime
 
 from sklearn.feature_extraction.text import CountVectorizer
 
+
 TOP_K_WORDS = 30           # present top words
 SMOOTHING_FACTOR = 1.0     # smoothing factor for calculate term contribution
 
@@ -53,7 +54,7 @@ class CreateVocabularies:
     """
 
     def __init__(self, description_file_p, description_file_q, log_dir, results_dir, vocabulary_method,
-                 results_dir_title, verbose_flag, trait='', vertical='', p_title=None, q_title=None, ngram_range=(1,1)):
+                 results_dir_title, verbose_flag, ngram_range=(1, 1), trait='', vertical='', p_title=None, q_title=None):
 
         # arguments
         self.description_file_p = description_file_p    # description file
@@ -144,6 +145,9 @@ class CreateVocabularies:
 
         if self.trait not in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']:
             raise ValueError('trait value must be one of the BF personality trait, using to create output directory')
+
+        if self.ngram_range[0] >= self.ngram_range[0]:
+            raise ValueError('n gram is not valid: ' + str(self.ngram_range))
 
         if not os.path.exists(self.dir_excel_token_appearance):
             os.makedirs(self.dir_excel_token_appearance)
@@ -583,11 +587,11 @@ class CreateVocabularies:
 
 
 def main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, trait):
+         verbose_flag, ngram_tuple, trait):
 
     # init class
     create_vocabularies_obj = CreateVocabularies(description_file_p, description_file_q, log_dir, results_dir,
-                                                 vocabulary_method, results_dir_title, verbose_flag, trait)
+                                                 vocabulary_method, results_dir_title, verbose_flag, ngram_tuple, trait)
 
     create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
@@ -597,9 +601,9 @@ def main(description_file_p, description_file_q, log_dir, results_dir, vocabular
 if __name__ == '__main__':
 
     # extraversion
-    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_2018-06-10 06:56:45.txt'
-    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2018-06-10 06:56:45.txt'
-    # trait = 'extraversion'
+    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_534_2018-06-11 19:29:07.txt'
+    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_939_2018-06-11 19:29:07.txt'
+    trait = 'extraversion'
 
     # openness
     # description_file_p = '../results/vocabulary/openness/documents_high_openness_2018-06-10 07:28:45.txt'
@@ -617,15 +621,16 @@ if __name__ == '__main__':
     # trait = 'conscientiousness'
 
     # neuroticism
-    description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
-    description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
-    trait = 'neuroticism'
+    # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
+    # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
+    # trait = 'neuroticism'
 
     log_dir = 'log/'
     results_dir = '../results/kl/'
     vocabulary_method = 'documents'    # 'documents', 'aggregation'
     results_dir_title = trait + '_05_gap_'
     verbose_flag = True
+    ngram_tuple = (1, 2)        # (1, 1)
 
     main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, trait)
+         verbose_flag, ngram_tuple, trait)
