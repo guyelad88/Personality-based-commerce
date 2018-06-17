@@ -1,5 +1,6 @@
 import sys
 import csv
+import os
 import logging
 
 
@@ -139,12 +140,16 @@ class ExtractDescriptions:
 
         # save descriptions texts into csv
         if save_flag:
+            if not os.path.exists(self.directory_output):
+                os.makedirs(self.directory_output)
+
             file_name = self.directory_output + 'num_items_' + str(len(self.item_text_dict)) + '_' + str(self.cur_time) + '.csv'
-            logging.info('File saved: ' + file_name)
             with open(file_name, 'wb') as f:
                 w = csv.writer(f)
                 w.writerow(['item_id', 'description'])
                 w.writerows(self.item_text_dict.items())
+
+            logging.info('File saved: ' + file_name)
 
         return
 
@@ -162,10 +167,10 @@ def main(description_file, log_dir, directory_output, verbose_flag):
 if __name__ == '__main__':
 
     # input file name
-    description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc.tsv'
-    # description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'
+    description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc.tsv'        # part 1
+    # description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'     # part 2
 
     log_dir = 'log/'
-    directory_output = 'descriptions_clean/'
+    directory_output = './results/descriptions_clean/'
     verbose_flag = True
     main(description_file, log_dir, directory_output, verbose_flag)

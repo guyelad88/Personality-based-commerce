@@ -24,7 +24,6 @@ class Utils:
 
         log_file_name = self.log_dir + 'utils_' + str(self.cur_time) + '.log'
 
-        # logging.getLogger().addHandler(logging.StreamHandler())
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
