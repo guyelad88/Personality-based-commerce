@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import nltk
 
+VALID_POS = ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS']
+
 
 class Utils:
 
@@ -39,10 +41,10 @@ class Utils:
         logging.info("start log program")
         self.logging = logging
 
-
     @staticmethod
     def convert_to_pos(df_description_path, logging):
 
+        logging.info('start to convert description to POS tagging')
         # items and their descriptions
         description_df = pd.read_csv(df_description_path)
         description_df = description_df[['item_id', 'description']]
@@ -73,10 +75,19 @@ class Utils:
                 },
                 ignore_index=True)
 
-        df_pos_str.to_csv('./data/descriptions_data/1425 users input/clean_pos_str_' +
-                              str(df_pos_str.shape[0]) + '.csv', index=False)
-        df_pos_list.to_csv('./data/descriptions_data/1425 users input/clean_pos_list_' +
-                          str(df_pos_list.shape[0]) + '.csv', index=False)
+        from time import gmtime, strftime
+        cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
+        pos_string_path = './data/descriptions_data/1425 users input/clean_pos_str_' + str(df_pos_str.shape[0]) \
+                          + '_time_' + str(cur_time) + '.csv'
+        pos_list_path = './data/descriptions_data/1425 users input/clean_pos_list_' + str(df_pos_list.shape[0]) \
+                        + '_time_' + str(cur_time) + '.csv'
+
+        df_pos_str.to_csv(pos_string_path, index=False)
+        logging.info('save POS-description in string format: ' + str(pos_string_path))
+
+        df_pos_list.to_csv(pos_list_path, index=False)
+        logging.info('save POS-description in list format: ' + str(pos_list_path))
 
     @staticmethod
     def _extract_pos(pos_tuple_list):
@@ -85,9 +96,12 @@ class Utils:
         pos_desc_list = list()          # return [pos_1, pos_2, ... , pos_n]
 
         for pos_tuple in pos_tuple_list:
-            pos_desc_str += pos_tuple[1]
-            pos_desc_str += ' '
-            pos_desc_list.append(pos_tuple)
+            if pos_tuple[1] in VALID_POS:
+                # pos_desc_str += pos_tuple[1]
+                pos_desc_str += pos_tuple[0]
+                pos_desc_str += ' '
+                # pos_desc_list.append(pos_tuple[1])
+                pos_desc_list.append(pos_tuple[0])
 
         return pos_desc_str, pos_desc_list
 
@@ -118,7 +132,7 @@ def main():
 
     utils_cls = Utils()
     utils_cls.init_debug_log()
-    description_path = './data/descriptions_data/1425 users input/clean_12884.csv'
+    description_path = './data/descriptions_data/1425 users input/clean_balance_8951_2018-06-13 11:30:15.csv'
 
     utils_cls.convert_to_pos(description_path, utils_cls.logging)
 

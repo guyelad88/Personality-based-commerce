@@ -113,6 +113,7 @@ class FilterDescription:
         description_df.to_csv(file_path, encoding='utf-8', index=False)
         logging.info('save file: ' + str(file_path))
 
+
     def calc_lost_ratio(self, before_size, after_size, reason):
         """ generic function to log the discarded proportion of the data"""
         ratio = float(after_size)/float(before_size)
@@ -128,6 +129,6 @@ def main(description_file, output_dir):
 
 
 if __name__ == '__main__':
-    description_file = '../data/descriptions_data/1425 users input/merge_20048.csv'
+    description_file = '../data/descriptions_data/1425 users input/merge_20048_time_2018-06-13 11:07:46.csv'
     output_dir = '../data/descriptions_data/1425 users input/'
     main(description_file, output_dir)

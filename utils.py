@@ -3,13 +3,17 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from time import gmtime, strftime
 
 
 class Utils:
-
+    """
+    separate utils functions:
+        1. truncate number of description per user
+        2. merge DF
+    """
     def __init__(self):
 
-        from time import gmtime, strftime
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.log_dir = 'log/'
         self.verbose_flag = True
@@ -132,15 +136,18 @@ class Utils:
                         index_drop = description_df[description_df.item_id == int(item_id)].index[0]
                         indexes_to_drop.append(index_drop)
                         logging.info('user: ' + str(user) + ', idx: ' + str(idx))
-        print(exist_items)
-        print(len(indexes_to_drop))
-        print(description_df.shape)
+
+        logging.info('Number of exist items: ' + str(exist_items))
+        logging.info('Number of drop descriptions: ' + str(len(indexes_to_drop)))
+        logging.info('Number of description before dropping: ' + str(description_df.shape))
         description_df.drop(description_df.index[indexes_to_drop], inplace=True)
-        print(description_df.shape)
-        description_df.to_csv('./data/descriptions_data/1425 users input/clean_balance' +
-                              str(description_df.shape[0]) + '.csv')
-        raise()
-        pass
+        logging.info('Number of description after dropping: ' + str(description_df.shape))
+
+        csv_file_name = './data/descriptions_data/1425 users input/clean_balance_' + str(description_df.shape[0]) + \
+                        '_' + str(strftime("%Y-%m-%d %H:%M:%S", gmtime())) + '.csv'
+        description_df.to_csv(csv_file_name)
+
+        logging.info('save file after balance: ' + str(csv_file_name))
 
     @staticmethod
     def clean_specific_words_from_description(clean_numbers=True, clean_pos=True):
@@ -180,18 +187,40 @@ class Utils:
                     '_desc_' + str(desc_num) + additional_str + '.png')
         plt.close()
 
+    @staticmethod
+    def _merge_to_csv(csv_1_path, csv_2_path):
+
+        description_df_1 = pd.read_csv(csv_1_path)
+        description_df_1 = description_df_1[['item_id', 'description']]
+
+        description_df_2 = pd.read_csv(csv_2_path)
+        description_df_2 = description_df_2[['item_id', 'description']]
+
+        description_df = description_df_1.append(description_df_2)
+
+        cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
+        description_df.to_csv('./data/descriptions_data/1425 users input/merge_' +
+                              str(description_df.shape[0]) + '_time_' + str(cur_time) + '.csv', index=False)
+
+        pass
+
 
 def main():
 
     utils_cls = Utils()
     utils_cls.init_debug_log()
+
     participants_purchase_history = './data/participant_data/1425 users input/Purchase History format item_id.csv'
-    description_path = './data/descriptions_data/1425 users input/clean_13430.csv'
+    description_path = './data/descriptions_data/1425 users input/clean_12902.csv'
 
     utils_cls.plot_histogram_users_number_of_description(description_path,
                                                          participants_purchase_history,
                                                          utils_cls.logging)
 
+    # csv_1_path = './kl/descriptions_clean/num_items_11344_2018-06-13 09:09:14.csv'
+    # csv_2_path = './kl/descriptions_clean/num_items_8704_2018-06-13 10:26:12.csv'
+    # utils_cls._merge_to_csv(csv_1_path, csv_2_path)
 
     pass
 

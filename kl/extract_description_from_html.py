@@ -159,15 +159,13 @@ def main(description_file, log_dir, directory_output, verbose_flag):
     extract_descriptions_obj.extract_words()
     extract_descriptions_obj.print_save_text()
 
+
 if __name__ == '__main__':
 
     # input file name
-    # description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc.tsv'
-    description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'
-    # description_file = '/Users/sguyelad/PycharmProjects/research/data/descriptions_data/2018_desc.csv'
-    # description_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/descriptions_data/2018_desc.csv'
-    # description_file = '/Users/sguyelad/PycharmProjects/Personality-based-commerce/data/descriptions_data/Descriptions_12_3_18_part_1/desc_kira_2017_01.csv'
-    # log_dir = '/Users/sguyelad/PycharmProjects/research/kl/log/'
+    description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc.tsv'
+    # description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'
+
     log_dir = 'log/'
     directory_output = 'descriptions_clean/'
     verbose_flag = True

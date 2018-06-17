@@ -147,7 +147,7 @@ class CreateVocabularies:
 
         return
 
-    # create vocabularies using input method
+    # main function - create vocabularies using input method
     def create_vocabulary_by_method(self):
         if self.split_method == 'vertical':
             self.vertical_split_item_into_groups()
@@ -390,9 +390,10 @@ def main(description_file, log_dir, directory_output, split_method, gap_value, v
 
 if __name__ == '__main__':
 
-    # description_file = 'descriptions/num_items_1552_2018-01-30 13:15:33.csv'        # html clean description
-    # description_file = '../data/descriptions_data/1425 users input/clean_13430.csv'   # html clean description
-    description_file = '../data/descriptions_data/1425 users input/clean_9405.csv'  # html clean description
+    # description_file = '../data/descriptions_data/1425 users input/clean_9405.csv'  # html clean description
+    # description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951.csv'  # html clean description
+    description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951_time_2018-06-16 16:54:11.csv'
+
     log_dir = 'log/'
     directory_output = '../results/vocabulary/'
     vocabulary_method = 'documents'         # 'documents', 'aggregation'
@@ -400,17 +401,16 @@ if __name__ == '__main__':
     split_method = 'traits'                 # 'vertical', 'traits', 'traits_vertical'
     gap_value = 0.5                         # must be a float number between zero to one
 
-    # needed if split_method is traits
-
-    # participants_survey_data = '../data/participant_data/participant_threshold_20_features_extraction.csv'  # users with more than 20 purchases
-    # participants_ebay_mapping_file = '../data/participant_data/personality_valid_users.csv'
-    # participants_purchase_history = '../data/participant_data/personality_purchase_history.csv'
-
+    # users with their BFI score + percentile
     participants_survey_data = '../data/participant_data/1425 users input/participant_bfi_score/users_with_bfi_score_amount_1425.csv'
+
+    # valid users name -> user_id   # TODO insert only real valid users (no duplication, remove fake users)
     participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
+
+    # users with all purchase history
     participants_purchase_history = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
 
-    personality_trait = 'openness'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
+    personality_trait = 'extraversion'  # 'agreeableness' 'extraversion' 'openness', 'conscientiousness', 'neuroticism'
     vertical = ''   # 'Fashion'
 
     main(description_file, log_dir, directory_output, split_method, gap_value, vocabulary_method, verbose_flag,

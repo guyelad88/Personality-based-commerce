@@ -54,7 +54,8 @@ class CreateVocabularies:
     """
 
     def __init__(self, description_file_p, description_file_q, log_dir, results_dir, vocabulary_method,
-                 results_dir_title, verbose_flag, ngram_range=(1, 1), trait='', vertical='', p_title=None, q_title=None):
+                 results_dir_title, verbose_flag, normalize_contribute, find_word_description,
+                 ngram_range=(1, 1), trait='', vertical='', p_title=None, q_title=None):
 
         # arguments
         self.description_file_p = description_file_p    # description file
@@ -64,6 +65,8 @@ class CreateVocabularies:
         self.vocabulary_method = vocabulary_method      # cal klPost, klCalc
         self.results_dir_title = results_dir_title      # init name to results file
         self.verbose_flag = verbose_flag                # print results in addition to log file
+        self.normalize_contribute = normalize_contribute    # whether to normalize coeff and the normalized type
+        self.find_word_description = find_word_description  # store the description the words appear in
         self.trait = trait
         self.vertical = vertical
         self.ngram_range = ngram_range
@@ -79,8 +82,6 @@ class CreateVocabularies:
             self.file_name_q = ntpath.basename(self.description_file_q)[:-4].split('_')[1]
 
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-
-        self.find_word_description_flag = False     # show all words descriptions
 
         # token and all the description he appears in
         self.dir_excel_token_appearance = self.results_dir + 'token/' + self.trait + '/'
@@ -146,8 +147,14 @@ class CreateVocabularies:
         if self.trait not in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']:
             raise ValueError('trait value must be one of the BF personality trait, using to create output directory')
 
-        if self.ngram_range[0] >= self.ngram_range[0]:
+        if self.ngram_range[0] > self.ngram_range[1]:
             raise ValueError('n gram is not valid: ' + str(self.ngram_range))
+
+        if 'type' not in self.normalize_contribute or 'flag' not in self.normalize_contribute:
+            raise ValueError('attributes missing in normalized contributes dictionary')
+
+        if 'k' not in self.find_word_description or 'flag' not in self.find_word_description:
+            raise ValueError('attributes missing in find word description dictionary')
 
         if not os.path.exists(self.dir_excel_token_appearance):
             os.makedirs(self.dir_excel_token_appearance)
@@ -161,11 +168,11 @@ class CreateVocabularies:
         if not os.path.exists(self.dir_top_k_word):
             os.makedirs(self.dir_top_k_word)
 
-    # load vocabularies regards to vocabulary method
+    # main function - load vocabularies regards to vocabulary method
     def run_kl(self):
 
         if self.vocabulary_method == 'documents':
-            self.load_vocabulary_vector_documents()
+            self.load_vocabulary_vector_documents()             # load documents + save attributes to later computation
             self.calculate_kl_and_language_models_documents()
         elif self.vocabulary_method == 'aggregation':
             self.load_vocabulary_vector_aggregation()
@@ -269,34 +276,32 @@ class CreateVocabularies:
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_documents(self):
 
+        # calculate D(p||q)
         name = 'P_' + str(self.file_name_p) + '_Q_' + str(
             self.file_name_q)
         logging.info(name)
         try:
-            self.calculate_separate_words_documents(self.occurrence_doc_sum_p, self.occurrence_doc_sum_q,
+            self._calculate_separate_words_documents(self.occurrence_doc_sum_p, self.occurrence_doc_sum_q,
                                                     self.count_vec_p.vocabulary_, self.count_vec_q.vocabulary_,
                                                     self.len_p, self.len_q, name, self.text_list_list_p,
                                                     self.text_list_list_q, self.X_dense_binary_p,
                                                     self.X_dense_binary_q, name, self.file_name_p)
         except Exception as e:
-            print('Exception occurred')
-            print(e)
-            pass
+            logging.info('Exception occurred')
+            logging.info(e)
 
-        logging.info('')
-
+        # calculate D(q||p)
         name = 'P_' + str(self.file_name_q) + '_Q_' + str(self.file_name_p)
         logging.info(name)
         try:
-            self.calculate_separate_words_documents(
-                self.occurrence_doc_sum_q, self.occurrence_doc_sum_p,
-                self.count_vec_q.vocabulary_, self.count_vec_p.vocabulary_,
-                self.len_q, self.len_p, name, self.text_list_list_q,
-                self.text_list_list_p, self.X_dense_binary_q, self.X_dense_binary_p, name, self.file_name_q)
+            self._calculate_separate_words_documents(self.occurrence_doc_sum_q, self.occurrence_doc_sum_p,
+                                                    self.count_vec_q.vocabulary_, self.count_vec_p.vocabulary_,
+                                                    self.len_q, self.len_p, name, self.text_list_list_q,
+                                                    self.text_list_list_p, self.X_dense_binary_q,
+                                                    self.X_dense_binary_p, name, self.file_name_q)
         except Exception as e:
-            print('Exception occurred')
-            print(e)
-            pass
+            logging.info('Exception occurred')
+            logging.info(e)
 
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_aggregation(self):
@@ -305,37 +310,116 @@ class CreateVocabularies:
 
         # cal most significant separate words - both direction
         self.calculate_separate_words_aggregation(self.X_dense[0].tolist()[0], self.X_dense[1].tolist()[0])
+
         self.calculate_separate_words_aggregation(self.X_dense[1].tolist()[0], self.X_dense[0].tolist()[0])
 
     # calculate most significance term to KL divergence
-    def calculate_separate_words_documents(self, X_p, X_q, dict_p, dict_q, len_p, len_q, name, p_text_list,
+    def _calculate_separate_words_documents(self, X_p, X_q, dict_p, dict_q, len_p, len_q, name, p_text_list,
                                            q_text_list, X_dense_binary_p, X_dense_binary_q, excel_name, file_name_p):
+
+        dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q)
+
+        if self.normalize_contribute['flag']:       # normalized cont.
+            dict_ratio = self._normalized_contribution(dict_ratio)
+
+        # save word contribution (KL contribution) for all words
+        self._save_all_word_contribution(dict_ratio, dict_p, file_name_p)
+
+        # save additional data to top k words + the description they appear in
+        self._save_top_k_word_extend_data(dict_ratio, dict_p, X_p, len_p, dict_q, X_q, len_q, name, p_text_list, q_text_list,
+                                          X_dense_binary_p, X_dense_binary_q, excel_name)
+
+    # calculate all words and their contribution
+    def _calculate_word_contribution(self, dict_p, X_p, len_p, dict_q, X_q, len_q):
 
         dict_ratio = dict()  # contain word index and his KL contribute
         inv_p = {v: k for k, v in dict_p.iteritems()}
-        inv_q = {v: k for k, v in dict_q.iteritems()}
 
-        # calculate contribution
+        # calculate word contribution
         for word_idx_p, tf_p in enumerate(X_p):
             if word_idx_p % 1000 == 0:
                 logging.info('calculate words contribution: ' + str(word_idx_p) + ' / ' + str(len(X_p)))
-            tf_p = np.float(tf_p[0]/len_p)
-            word_p = inv_p[word_idx_p]
+
+            tf_p = np.float(tf_p[0] / len_p)  # p fraction
+            word_p = inv_p[word_idx_p]  # p word
 
             if word_p not in dict_q:
-                tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)        # smooth q
+                tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)  # word not in q distribution - using smoothing
             else:
-                tf_q = np.float(X_q[dict_q[word_p]][0]/len_q)
+                tf_q = np.float(X_q[dict_q[word_p]][0] / len_q)  # word appears in q
 
-            contribute = tf_p * np.log(tf_p / tf_q)
-            dict_ratio[word_idx_p] = contribute
+            contribute = tf_p * np.log(tf_p / tf_q)  # calculate contribution
+            dict_ratio[word_idx_p] = contribute  # store value
 
+        return dict_ratio
+
+    # normalized KL coefficients
+    def _normalized_contribution(self, dict_ratio):
+
+        logging.info('normalized word contribution')
+        mean_contribute = sum(dict_ratio.values()) / len(dict_ratio.values())
+        offset = 1.0 / mean_contribute
+        logging.info('offset value: ' + str(round(offset, 3)))
+
+        if offset < 0:
+            raise ValueError('normalized factor is below zero: ' + str(offset))
+
+        for idx, cont in dict_ratio.iteritems():
+            dict_ratio[idx] = cont * offset
+
+        return dict_ratio
+
+    # save all KL word contribution - word: contribution
+    def _save_all_word_contribution(self, dict_idx_contribute, dict_word_index, file_name_p_distribution):
+        """
+        save all word contribution to KL metric after normalize them
+        :param dict_idx_contribute:
+        :param dict_word_index:
+        :param file_name_p_distribution:
+        :return:
+        """
+
+        dict_idx_contribute = sorted(dict_idx_contribute.items(), key=operator.itemgetter(1))
+        dict_idx_contribute.reverse()
+
+        # create excel header
+        book = xlwt.Workbook(encoding="utf-8")
+
+        sheet1 = book.add_sheet('KL contribute')
+        sheet1.write(0, 0, 'Word')
+        sheet1.write(0, 1, 'contribute')
+
+        logging.info('number of words: ' + str(len(dict_idx_contribute)))
+        row_insert = 0
+        for idx, tup in enumerate(dict_idx_contribute):
+            cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]   # get word by index
+            try:
+                sheet1.write(row_insert + 1, 0, str(cur_word.encode('utf8')))
+                sheet1.write(row_insert + 1, 1, str(tup[1]))
+                row_insert += 1
+            except Exception, e:
+                logging.info('Failed: ' + str(e))
+                logging.info('Failed: ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
+                pass
+
+        dir_name = self.dir_all_words_contribute + str(self.cur_time) + '_p_' + str(self.len_p) + '_q_' + \
+                   str(self.len_q) + '/'
+
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
+        excel_file_name = dir_name + str(self.trait) + '_' + str(file_name_p_distribution) + '_num_token_' + \
+                          str(row_insert) + '.xls'
+
+        logging.info('save all words contribute in file: ' + str(excel_file_name))
+        book.save(excel_file_name)
+
+    # save top k words relevant  data
+    def _save_top_k_word_extend_data(self, dict_ratio, dict_p, X_p, len_p, dict_q, X_q, len_q, name, p_text_list, q_text_list,
+                                     X_dense_binary_p, X_dense_binary_q, excel_name):
         # save all term contribute in a file
         dict_max_ratio = sorted(dict_ratio.items(), key=operator.itemgetter(1))
         dict_max_ratio.reverse()
-
-        # calculate KL contribute for all words
-        self.calculate_words_contribute(dict_ratio, dict_p, file_name_p)
 
         # find top k tokens
         counter = 0
@@ -372,10 +456,12 @@ class CreateVocabularies:
                 tf_q = X_q[dict_q[cur_word]][0]
                 q_idx = dict_q[cur_word]
 
-            if self.find_word_description_flag:
+            if self.find_word_description['flag']:
+                logging.info('')
+                logging.info('find K description per top words (highest contribution)')
                 # find occurrences of current terms and save descriptions in both distribution in excel file
                 self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
-                                                        X_dense_binary_p, X_dense_binary_q, excel_name, counter)
+                                                    X_dense_binary_p, X_dense_binary_q, excel_name, counter)
 
             # self.save_descriptions_contain_terms(str(cur_word), tf_p, tf_q, p_text_list, q_text_list)
 
@@ -393,7 +479,7 @@ class CreateVocabularies:
 
         # save top k token with counting
         excel_file_name = self.dir_top_k_word + 'K_' + str(TOP_K_WORDS) + '_Smooth_' + \
-                          str(SMOOTHING_FACTOR) + '_' +str(self.vocabulary_method) + '_' + str(name) + \
+                          str(SMOOTHING_FACTOR) + '_' + str(self.vocabulary_method) + '_' + str(name) + \
                           '_top_' + str(TOP_K_WORDS) + '_' + str(self.cur_time) + '.xls'
 
         book.save(excel_file_name)
@@ -401,47 +487,7 @@ class CreateVocabularies:
         logging.info('')
         logging.info('')
 
-    # calculate KL contribute for all words
-    def calculate_words_contribute(self, dict_idx_contribute, dict_word_index, file_name_p_distribution):
-
-        mean_contribute = sum(dict_idx_contribute.values())/len(dict_idx_contribute.values())
-        offset = 1.0/mean_contribute
-        for idx, cont in dict_idx_contribute.iteritems():
-            dict_idx_contribute[idx] = cont*offset
-
-        dict_idx_contribute = sorted(dict_idx_contribute.items(), key=operator.itemgetter(1))
-        dict_idx_contribute.reverse()
-
-        # create excel header
-        book = xlwt.Workbook(encoding="utf-8")
-
-        sheet1 = book.add_sheet('KL contribute')
-        sheet1.write(0, 0, 'Word')
-        sheet1.write(0, 1, 'contribute')
-
-        logging.info('number of words: ' + str(len(dict_idx_contribute)))
-        row_insert = 0
-        for idx, tup in enumerate(dict_idx_contribute):
-            cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]   # get word by index
-            try:
-                sheet1.write(row_insert + 1, 0, str(cur_word.encode('utf8')))
-                sheet1.write(row_insert + 1, 1, str(tup[1]))
-                row_insert += 1
-            except Exception, e:
-                logging.info('Failed: ' + str(e))
-                logging.info('Failed: ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
-                pass
-        dir_name = self.dir_all_words_contribute + str(self.cur_time) + '_p_' + str(self.len_p) + '_q_' + \
-                   str(self.len_q) + '/'
-
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-
-        excel_file_name = dir_name + str(self.trait) + '_' + str(file_name_p_distribution) + \
-                          '_num_token_' + str(row_insert) + '.xls'
-
-        logging.info('save all words contribute in file: ' + str(excel_file_name))
-        book.save(excel_file_name)
+        pass
 
     # calculate most significance term to KL divergence
     def calculate_separate_words_aggregation(self, X_p, X_q):
@@ -524,15 +570,19 @@ class CreateVocabularies:
         sheet1.write(0, 1, 'Item description')
         row_p_i = 0
         cur_word_doc_counter = 0
+        cnt = 0
         for row in X_dense_binary_p:
+            if cnt > 10:
+                break
             cur_row_list = np.array(row)[0].tolist()  # binary list - 1 if word in descriptions
-            if cur_row_list[tup[0]] > 0:
+            if cur_row_list[tup[0]] > 0:        # iterate over all description, extract where '1' on the token
                 cur_word_doc_counter += 1
+                cnt += 1
                 sheet1.write(cur_word_doc_counter, 0, row_p_i)
                 sheet1.write(cur_word_doc_counter, 1, p_text_list[row_p_i])
             row_p_i += 1
 
-        assert cur_word_doc_counter == tf_p
+        # assert cur_word_doc_counter == tf_p
 
         if q_idx >= 0:
             # Q distribution
@@ -540,16 +590,20 @@ class CreateVocabularies:
             sheet2.write(0, 0, 'Item index')
             sheet2.write(0, 1, 'Item description')
             row_q_i = 0
+            cnt = 0
             cur_word_doc_counter = 0
             for row in X_dense_binary_q:
+                if cnt > 10:
+                    break
                 cur_row_list = np.array(row)[0].tolist()  # binary list - 1 if word in descriptions
                 if cur_row_list[q_idx] > 0:
                     cur_word_doc_counter += 1
                     sheet2.write(cur_word_doc_counter, 0, row_q_i)
                     sheet2.write(cur_word_doc_counter, 1, q_text_list[row_q_i])
+                    cnt +=1
                 row_q_i += 1
 
-            assert cur_word_doc_counter == tf_q
+            # assert cur_word_doc_counter == tf_q
 
         # directory with file to each token
         cur_dir = self.dir_excel_token_appearance + str(self.vertical) + '_' + str(self.trait) + '_' + str(excel_name) + '_' + str(self.cur_time) + '/'
@@ -587,11 +641,12 @@ class CreateVocabularies:
 
 
 def main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, ngram_tuple, trait):
+         verbose_flag, normalize_contribute, find_word_description, ngram_tuple, trait):
 
     # init class
     create_vocabularies_obj = CreateVocabularies(description_file_p, description_file_q, log_dir, results_dir,
-                                                 vocabulary_method, results_dir_title, verbose_flag, ngram_tuple, trait)
+                                                 vocabulary_method, results_dir_title, verbose_flag,
+                                                 normalize_contribute, find_word_description, ngram_tuple, trait)
 
     create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
@@ -601,8 +656,12 @@ def main(description_file_p, description_file_q, log_dir, results_dir, vocabular
 if __name__ == '__main__':
 
     # extraversion
-    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_534_2018-06-11 19:29:07.txt'
-    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_939_2018-06-11 19:29:07.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_534_2018-06-11 19:29:07.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_939_2018-06-11 19:29:07.txt'
+    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_500_2018-06-13 12:00:21.txt'
+    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_885_2018-06-13 12:00:21.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_483_2018-06-16 16:55:35.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_849_2018-06-16 16:55:35.txt'
     trait = 'extraversion'
 
     # openness
@@ -627,10 +686,19 @@ if __name__ == '__main__':
 
     log_dir = 'log/'
     results_dir = '../results/kl/'
-    vocabulary_method = 'documents'    # 'documents', 'aggregation'
+    vocabulary_method = 'aggregation'    # 'documents', 'aggregation'
     results_dir_title = trait + '_05_gap_'
     verbose_flag = True
-    ngram_tuple = (1, 2)        # (1, 1)
+    normalize_contribute = {        # normalize word contribution extracted KL equation
+        'flag': False,
+        'type': 'ratio'
+    }
+    find_word_description = {       # save top words with k description they appear in
+        'flag': True,
+        'k': 10
+    }
+
+    ngram_tuple = (1, 1)        # (1, 1)
 
     main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, ngram_tuple, trait)
+         verbose_flag, normalize_contribute, find_word_description, ngram_tuple, trait)
