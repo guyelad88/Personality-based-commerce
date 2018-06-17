@@ -76,7 +76,6 @@ class ExtractDescriptions:
 
     def extract_words(self):
 
-        import urllib
         from bs4 import BeautifulSoup
         count_id = 0
         for item_id, description_string in self.item_description_dict.iteritems():
