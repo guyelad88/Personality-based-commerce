@@ -187,7 +187,7 @@ class CreateVocabularies:
 
         with open(self.description_file_p, 'rb') as fp:
             text_list_list_p = pickle.load(fp)
-            self.text_list_list_p = text_list_list_p        # all items in p
+            self.text_list_list_p = text_list_list_p.value        # all items in p
             self.len_p = np.float(len(text_list_list_p))
             logging.info('P #of items descriptions: ' + str(self.len_p))
 
@@ -457,8 +457,6 @@ class CreateVocabularies:
                 q_idx = dict_q[cur_word]
 
             if self.find_word_description['flag']:
-                logging.info('')
-                logging.info('find K description per top words (highest contribution)')
                 # find occurrences of current terms and save descriptions in both distribution in excel file
                 self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
                                                     X_dense_binary_p, X_dense_binary_q, excel_name, counter)
@@ -658,10 +656,14 @@ if __name__ == '__main__':
     # extraversion
     # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_534_2018-06-11 19:29:07.txt'
     # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_939_2018-06-11 19:29:07.txt'
-    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_500_2018-06-13 12:00:21.txt'
-    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_885_2018-06-13 12:00:21.txt'
-    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_483_2018-06-16 16:55:35.txt'
-    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_849_2018-06-16 16:55:35.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_500_2018-06-13 12:00:21.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_885_2018-06-13 12:00:21.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_410_2018-06-17 09:04:28.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_876_2018-06-17 09:04:28.txt'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_457_2018-06-17 09:13:38.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_1106_2018-06-17 09:13:38.txt'
+    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_962_2018-06-17 15:48:07.txt'
+    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2175_2018-06-17 15:48:07.txt'
     trait = 'extraversion'
 
     # openness
@@ -682,11 +684,13 @@ if __name__ == '__main__':
     # neuroticism
     # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_2018-06-10 07:38:36.txt'
     # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_2018-06-10 07:38:36.txt'
+    # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_705_2018-06-17 09:19:06.txt'
+    # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_858_2018-06-17 09:19:06.txt'
     # trait = 'neuroticism'
 
     log_dir = 'log/'
     results_dir = '../results/kl/'
-    vocabulary_method = 'aggregation'    # 'documents', 'aggregation'
+    vocabulary_method = 'documents'    # 'documents', 'aggregation'
     results_dir_title = trait + '_05_gap_'
     verbose_flag = True
     normalize_contribute = {        # normalize word contribution extracted KL equation

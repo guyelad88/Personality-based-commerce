@@ -4,9 +4,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from time import gmtime, strftime
+from utils.logger import Logger
 
 
-class Utils:
+class UtilsFunction:
     """
     separate utils functions:
         1. truncate number of description per user
@@ -41,21 +42,13 @@ class Utils:
         logging.info("start log program")
         self.logging = logging
 
-    @staticmethod
-    def truncate_description_per_user():
-        """
-        limit the number of descriptions per user in data-set. (purpose - only the ones which pass the filtering).
-        hopefully it will avoid deviation of hte output language model.
-        """
-        pass
 
     @staticmethod
-    def plot_histogram_users_number_of_description(df_description_path, participants_purchase_history_path, logging,
-                                                   max_desc=None):
+    def truncate_description_per_user(df_description_path, participants_purchase_history_path, logging, max_desc=None):
         """
-        plot number of description per user appears in the data-set (purpose - only the ones which pass the filtering)
+        limit the number of descriptions per user in the data-set. (purpose - only the ones which pass the filtering).
+        plot number of description per user appears in the data-set
         """
-
         # items and their descriptions
         description_df = pd.read_csv(df_description_path)
         description_df = description_df[['item_id', 'description']]
@@ -97,14 +90,14 @@ class Utils:
         logging.info('total found int: ' + str(total_found_int))
         logging.info(max(item_amount_per_users))
         a = np.array(item_amount_per_users)
-        Utils._calculate_list_statistic(a, logging)
-        Utils._plot_histogram(a, user_group.ngroups, len(item_list), '')
+        UtilsFunction._calculate_list_statistic(a, logging)
+        UtilsFunction._plot_histogram(a, user_group.ngroups, len(item_list), logging, '')
 
         logging.info('')
         logging.info('remove zeros from list - users without purchase')
         a = list(filter(lambda x: x != 0, a))
-        Utils._calculate_list_statistic(a, logging)
-        Utils._plot_histogram(a, user_group.ngroups, len(item_list), '_non_zeros')
+        UtilsFunction._calculate_list_statistic(a, logging)
+        UtilsFunction._plot_histogram(a, user_group.ngroups, len(item_list), logging, '_non_zeros')
 
         if max_desc is None:
             max_desc = int(round(np.percentile(a, 95)))
@@ -113,8 +106,8 @@ class Utils:
         logging.info('max description: ' + str(max_desc))
 
         a = list(filter(lambda x: x <= max_desc, a))
-        Utils._calculate_list_statistic(a, logging)
-        Utils._plot_histogram(a, user_group.ngroups, len(item_list), '_truncated', max_desc)
+        UtilsFunction._calculate_list_statistic(a, logging)
+        UtilsFunction._plot_histogram(a, user_group.ngroups, len(item_list), logging, '_truncated', max_desc)
 
         # truncate descriptions
         indexes_to_drop = []
@@ -127,33 +120,111 @@ class Utils:
             logging.info('user: ' + str(user) + ', number of purchases group: ' + str(group.shape[0]))
 
             user_items = 0
+            item_deleted = 0
             for idx, item_id in group['item_id'].items():
                 if int(item_id) in item_dict:
                     exist_items += 1
                     user_items += 1
                     if user_items > max_desc:
+                        item_deleted += 1
                         index_drop = description_df[description_df.item_id == int(item_id)].index[0]
                         indexes_to_drop.append(index_drop)
-                        logging.info('user: ' + str(user) + ', idx: ' + str(idx))
+                        # logging.info('user: ' + str(user) + ', idx: ' + str(idx))
+            logging.info('deleted items: ' + str(item_deleted))
 
         logging.info('Number of exist items: ' + str(exist_items))
         logging.info('Number of drop descriptions: ' + str(len(indexes_to_drop)))
         logging.info('Number of description before dropping: ' + str(description_df.shape))
+
         description_df.drop(description_df.index[indexes_to_drop], inplace=True)
+
         logging.info('Number of description after dropping: ' + str(description_df.shape))
 
         csv_file_name = './data/descriptions_data/1425 users input/clean_balance_' + str(description_df.shape[0]) + \
                         '_' + str(strftime("%Y-%m-%d %H:%M:%S", gmtime())) + '.csv'
-        description_df.to_csv(csv_file_name)
 
+        description_df.to_csv(csv_file_name)
         logging.info('save file after balance: ' + str(csv_file_name))
+
+    @staticmethod
+    def truncate_description_per_user_merged(merge_df_path, log_file_name, max_desc=None):
+        """
+        limit the number of descriptions per user in the data-set.
+        1.
+        plot number of description per user appears in the data-set
+        """
+
+        # update logger properties
+        Logger.set_handlers('TruncateDescription', log_file_name, level='info')
+
+        merge_df = pd.read_csv(merge_df_path)  # history purchase
+        Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
+
+        # calculate description distribution before truncate action
+        item_amount_per_users = merge_df['buyer_id'].value_counts().tolist()
+        a = np.array(item_amount_per_users)
+        UtilsFunction._calculate_list_statistic(a)
+        UtilsFunction._plot_histogram(a, len(a), sum(a), '')
+
+        # build histogram without users with zero description
+        Logger.info('')
+        Logger.info('remove zeros from list - users without purchase')
+        a = list(filter(lambda x: x != 0, a))
+        UtilsFunction._calculate_list_statistic(a)
+        UtilsFunction._plot_histogram(a, len(a), sum(a), '_non_zeros')
+
+        # choose maximum number of description per user
+        if max_desc is None:
+            max_desc = int(round(np.percentile(a, 95)))
+        Logger.info('maximum number of description per user: ' + str(max_desc))
+
+        # truncate descriptions
+        merge_df['truncate_description'] = True
+        user_group = merge_df.groupby('buyer_id')
+        for user, group in user_group:
+            Logger.debug('')
+            Logger.debug('user: {}, number of purchases: {}'.format(str(user), str(group.shape[0])))
+            user_item_idx = 0
+            for s_idx, row in group.iterrows():
+
+                user_item_idx += 1
+                if user_item_idx > max_desc:
+                    merge_df.at[s_idx, 'truncate_description'] = True       # row will remove
+                else:
+                    merge_df.at[s_idx, 'truncate_description'] = False      # row will remain
+
+        # filter redundant description
+        Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
+        merge_df = merge_df[~merge_df.truncate_description]
+        Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
+
+        # show distribution after filtering redundant description
+        a = merge_df['buyer_id'].value_counts().tolist()
+        UtilsFunction._calculate_list_statistic(np.array(a))
+        UtilsFunction._plot_histogram(a, len(a), sum(a), '_truncated', max_desc)
+
+        # '../data/descriptions_data/1425 users input/clean_balance_{}_{}.csv'
+        dir_path = '../results/data/truncate_description/'
+        csv_file_name = '{}_{}.csv'.format(
+            str(merge_df.shape[0]),
+            str(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+        )
+
+        UtilsFunction._create_folder_and_save(merge_df, dir_path, csv_file_name, 'save file truncate maximum num description')
+
+    @staticmethod
+    def _create_folder_and_save(df, dir_path, file_name, log_title):
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        df.to_csv('{}{}'.format(dir_path, file_name))
+        Logger.info('{}: {}'.format(log_title, str(file_name)))
 
     @staticmethod
     def clean_specific_words_from_description(clean_numbers=True, clean_pos=True):
         if clean_numbers:
-            Utils.clean_numbers()
+            UtilsFunction.clean_numbers()
         if clean_pos:
-            Utils.clean_pos()
+            UtilsFunction.clean_pos()
         pass
 
     @staticmethod
@@ -165,26 +236,31 @@ class Utils:
         pass
 
     @staticmethod
-    def _calculate_list_statistic(np_list, logging):
-        logging.info('0.05: ' + str(round(np.percentile(np_list, 5), 3)))
-        logging.info('q1: ' + str(round(np.percentile(np_list, 25), 3)))
-        logging.info('median: ' + str(round(np.percentile(np_list, 50), 3)))
-        logging.info('q3: ' + str(round(np.percentile(np_list, 75), 3)))
-        logging.info('0.95: ' + str(round(np.percentile(np_list, 95), 3)))
-        logging.info('0.99: ' + str(round(np.percentile(np_list, 99), 3)))
+    def _calculate_list_statistic(np_list):
+        Logger.info('0.05: ' + str(round(np.percentile(np_list, 5), 3)))
+        Logger.info('q1: ' + str(round(np.percentile(np_list, 25), 3)))
+        Logger.info('median: ' + str(round(np.percentile(np_list, 50), 3)))
+        Logger.info('q3: ' + str(round(np.percentile(np_list, 75), 3)))
+        Logger.info('0.95: ' + str(round(np.percentile(np_list, 95), 3)))
+        Logger.info('0.99: ' + str(round(np.percentile(np_list, 99), 3)))
 
     @staticmethod
     def _plot_histogram(a, user_amount, desc_num, additional_str, bin=100):
+        """ generic file to plot histogram and save plot """
 
         plt.style.use('seaborn-deep')
-        # plt.xlim(0, 100)
-        # plt.ylim(0, y_max)
         plt.hist(a, bins=bin)
-        plt.title('truncated description per user')
-        plt.savefig('./results/utils/' + 'histogram_user_description' +
-                    '_user_' + str(user_amount) +
-                    '_desc_' + str(desc_num) + additional_str + '.png')
+        plt.title('description per user {}'.format(additional_str))
+
+        plot_path = '../results/utils/HistogramUserDescriptionAmount_user_{}_desc_{}{}.png'.format(
+            str(user_amount),
+            str(desc_num),
+            additional_str)
+
+        plt.savefig(plot_path)
         plt.close()
+
+        Logger.info('save histogram plot: ' + str(plot_path))
 
     @staticmethod
     def _merge_to_csv(csv_1_path, csv_2_path):
@@ -207,15 +283,26 @@ class Utils:
 
 def main():
 
-    utils_cls = Utils()
-    utils_cls.init_debug_log()
+    utils_cls = UtilsFunction()
 
     participants_purchase_history = './data/participant_data/1425 users input/Purchase History format item_id.csv'
-    description_path = './data/descriptions_data/1425 users input/clean_12902.csv'
+    # description_path = './data/descriptions_data/1425 users input/clean_12902.csv'
+    description_path = './data/descriptions_data/1425 users input/clean_balance_8646_2018-06-17 15:17:04.csv'
+    merge_df_path = './results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'
 
-    utils_cls.plot_histogram_users_number_of_description(description_path,
-                                                         participants_purchase_history,
-                                                         utils_cls.logging)
+    log_file_path = 'log/merge_data_sets_2018-06-20 11:41:43.log'
+    cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    log_dir = 'log/'
+    file_prefix = 'aaaaa'
+    log_file_name = 'log/{}_{}.log'.format(file_prefix, cur_time)
+
+    utils_cls.truncate_description_per_user_merged(merge_df_path=merge_df_path,
+                                                   log_file_name=log_file_name,
+                                                   max_desc=None)
+
+    """utils_cls.truncate_description_per_user(description_path,
+                                            participants_purchase_history,
+                                            utils_cls.logging)"""
 
     # csv_1_path = './kl/descriptions_clean/num_items_11344_2018-06-13 09:09:14.csv'
     # csv_2_path = './kl/descriptions_clean/num_items_8704_2018-06-13 10:26:12.csv'

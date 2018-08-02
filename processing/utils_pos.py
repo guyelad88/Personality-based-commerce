@@ -1,11 +1,9 @@
 import logging
 import pandas as pd
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 import nltk
 
-VALID_POS = ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS']
+VALID_POS = ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS']        # remain only this POS
 
 
 class Utils:

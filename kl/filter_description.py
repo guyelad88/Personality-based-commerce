@@ -17,14 +17,18 @@ DROP_NON_ENGLISH = True
 
 class FilterDescription:
     """
-        clean description:
-        a. remain description language == 'english'
-        b. description length between min and max
-        c. drop description contain na
+        clean description - remain description which fulfill the following condition:
+            a. description written in english
+            b. description length between min and max
+            c. description doesn't contain na
 
-        :return: save description ./data/description_data/.../clean_#description.csv
+        :return: save the clean description in path ./data/description_data/.../clean_#description.csv
     """
     def __init__(self, description_file, output_dir):
+        """
+        :param description_file: file contain description with
+        :param output_dir:
+        """
         self.verbose_flag = True
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.log_dir = 'log/'
@@ -112,7 +116,6 @@ class FilterDescription:
         file_path = output_dir + 'clean_' + str(description_df.shape[0]) + '.csv'
         description_df.to_csv(file_path, encoding='utf-8', index=False)
         logging.info('save file: ' + str(file_path))
-
 
     def calc_lost_ratio(self, before_size, after_size, reason):
         """ generic function to log the discarded proportion of the data"""

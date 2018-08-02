@@ -120,6 +120,7 @@ class CalculateBFIScore:
     # load csv into df
     def load_clean_csv_results(self):
         self.participant_df = pd.read_csv(self.participant_file)
+        self.participant_df['eBay site user name'] = self.participant_df['eBay site user name'].str.lower()
 
     # TODO not in use - extract valid user_name only - currently not in use
     def clean_df(self):
@@ -389,7 +390,7 @@ if __name__ == '__main__':
     # input file name
     participant_file = '../data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
     dir_save_results = '../results/BFI_results/'
-    threshold = 0.5
+    threshold = 0.8
     name_length_threshold = 5
 
     main(participant_file, dir_save_results, threshold, name_length_threshold)

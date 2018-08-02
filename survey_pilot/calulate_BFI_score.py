@@ -276,63 +276,14 @@ class CalculateScore:
         for (idx, row_participant) in self.df.iterrows():
             logging.info('Participant: ' + str(row_participant['Username']))
             if idx > 0:
-               raise
+               raise ValueError('Blocking option to send e-mail to people')
 
-            # if row_participant['Username'] not in ['guy.elad88@gmail.com', 'hharush@ebay.com']:
-            #     continue
+            if row_participant['Username'] not in ['guy.elad88@gmail.com', 'hharush@ebay.com']:
+                 continue
             # 'guy.elad88@gmail.com'
             # do not send mail twice
             # eBay
             if row_participant['Username'] not in ['guy.elad88@gmail.com']:
-                continue
-
-            if row_participant['Username'] in ['Hilyabr@gmail.com']:
-                continue
-
-            if row_participant['Username'] in ['hagarosental@gmail.com', 'ravidrotem@gmail.com', 'Micelad@gmail.com',
-                       'Ibgd@bezeqint.net', 'kradinsky@ebay.com', 'guyel1988@gmail.com',
-                       'hharush@ebay.com', 'okeynan@ebay.com', 'alnus@ebay.com', 'mlayfer@ebay.com',
-                       'nkarlinski@ebay.com', 'ehacker@ebay.com', 'tsoleman@ebay.com', 'tlaor@ebay.com',
-                       'seventov@ebay.com', 'tmalkai@ebay.com', 'efrayerman@ebay.com', 'rgoldberg@ebay.com',
-                       'egur@ebay.com', 'rsitman@ebay.com', 'ymarkus@ebay.com', 'mszuchman@ebay.com',
-                       'ikraisler@ebay.com', 'rshafir@ebay.com', 'eschichmanter@ebay.com', 'iris_mundigl@yahoo.co.uk',
-                       'daniellemenuhin@gmail.com', 'ogreen@ebay.com', 'Birandan310@gmail.com', 'caharonson@ebay.com',
-                       'tlazan@ebay.com', 'olibchik@ebay.com', 'dyerushalmi@ebay.com', 'rbryl@rbay.com',
-                       'mebin@ebay.com', 'oyardeni@ebay.com', 'rcohenzedek@ebay.com', 'abetzaleli@ebay.com',
-                       'sicohen@ebay.com', 'zmasad@ebay.com', 'lgreenblat@ebay.com', 'rtoueg@ebay.com', 'nopkanastia@gmailcom',
-                       'dkesten@ebay.com', 'gmikles@ebay.com', 'bfridschtein@ebay.com', 'mmarkus@ebay.com',
-                       'esorochkin@ebay.com', 'nleadner@ebay.com', 'asonnenberg@ebay.com', 'hmalul@ebay.com',
-                       'nasolomon@ebay.com', 'rgilboa@ebay.com', 'abentsedef@ebay.com', 'jomendes@ebay.com',
-                       'ematusov@ebay.com', 'annulechka@gmail.com', 'dbelahcen@ebay.com', 'ybarkaisygon@ebay.com',
-                                               'yuval.matalon@ebay.com', 'ushtand@ebay.com', 'nshimoni@ebay.com',
-                                               'rsaadon@ebay.com', 'dsahar@ebay.com']:
-                continue
-
-            # ['guy.elad88@gmail.com', 'yotamitai@gmail.com', 'ortalsen@gmail.com', 'shpshi@gmail.com', 'nir.lotan@gmail.com', 'Lior.krup@gmail.com', 'Oferst13@gmail.com', 'Oferst13@gmail.com', 'dor.ringel@gmail.com', 'kissmy@hairyass.com', 'None@none.com', 'Gadivp@walla.com', 'maoruliel@gmail.com', 'Avitalnevo@gmail.com', 'Dorzohar@gmail.com', 'Ronychanoch@gmail.com', 'Noyuzi@gmail.com', 'Guy.shoenfeld@gmail.com', 'dananuriel23@gmail.com', 'itaigol90@gmail.com', 'vipersss@walla.co.il', 'hadar.ringel@gmail.com', 't.flysher1@gmail.com', 'barak.steinmetz@gmail.com', 'oferavioz1@gmail.com', 'Roi.rabinian@gmail.com', 'Idanco40@gmail.com', 'JohnJohns@gmail.com', 'yotamzrl@gmail.com', 'jonasbrami@gmail.com', 'eladberla@gmail.com', 'mor139@hotmail.com', 'Litalfelzn@gmail.com', 'Nourtech17@gmail.com', 'xxxoooxo5@gmail.com', 'pu$$y$layer420@gmail.com', 'dvir.dukhan@campus.technion.ac.il', 'Tanya9kin@gmail.com', 'tal6el@gmail.com', 'irrelevant@gmail.com', 'howbfjla@sharklasers.com', '794orik@gmail.com', 'eliashayek1995@live.com']
-            # Technion
-
-            if row_participant['Username'] in ['yotamitai@gmail.com', 'ortalsen@gmail.com', 'shpshi@gmail.com',
-                       'nir.lotan@gmail.com', 'Lior.krup@gmail.com', 'Oferst13@gmail.com', 'Oferst13@gmail.com',
-                       'dor.ringel@gmail.com', 'kissmy@hairyass.com', 'None@none.com', 'Gadivp@walla.com',
-                       'maoruliel@gmail.com', 'Avitalnevo@gmail.com', 'Dorzohar@gmail.com', 'Ronychanoch@gmail.com',
-                       'Noyuzi@gmail.com', 'Guy.shoenfeld@gmail.com', 'dananuriel23@gmail.com', 'itaigol90@gmail.com',
-                       'vipersss@walla.co.il', 'hadar.ringel@gmail.com', 't.flysher1@gmail.com',
-                       'barak.steinmetz@gmail.com', 'oferavioz1@gmail.com', 'Roi.rabinian@gmail.com',
-                       'Idanco40@gmail.com', 'JohnJohns@gmail.com', 'yotamzrl@gmail.com', 'jonasbrami@gmail.com',
-                       'eladberla@gmail.com', 'mor139@hotmail.com', 'Litalfelzn@gmail.com', 'Nourtech17@gmail.com',
-                       'xxxoooxo5@gmail.com', 'pu$$y$layer420@gmail.com', 'dvir.dukhan@campus.technion.ac.il',
-                       'Tanya9kin@gmail.com', 'tal6el@gmail.com', 'irrelevant@gmail.com', 'howbfjla@sharklasers.com',
-                       '794orik@gmail.com', 'eliashayek1995@live.com', 'talil@edu.haifa.ac.il', 'u12475@mvrht.net',
-                       'bercovitz5@gmail.com', 'nopkanastia@gmail.com', 'nivshahar1@gmail.com', 'Shimonsheiba@gmail.com',
-                       'eranaha@gmail.com', 'augu144@gmail.com', 'noaw177@gmail.com', 'Boris12345@gmail.com',
-                       'orrmazor@gmail.com', 'Tomer.golany@gmail.com', 'hadarydar@gmail.com', 'Liel.mayost@gmail.com',
-                       'oritorbo@gmail.com', 'Omer.amit@gmail.com', 'Gufi97@gmail.com', 'samyon.v@gmail.com',
-                       'orgoldreich@gmail.com', 'klarag565@gmail.com', 'sapir.reg@campus.technion.ac.il',
-                       'Hamody315@gmail.com', 'Saharsela271@gmail.com', 'Avishaya67@gmail.com', 'Saifunny@gmail.com',
-                       '123@123.com', 'Michal.inbar0@gmail.com', 'Hilyabr@gmail.com', 'izikasch@hotmail.com',
-                                               'sylilit@campus.technion.ac.il', 'Hilyabr@gmail.com',
-                                               'sivanr86@gmail.com', 'Shiharel1@gmail.com',
-                                               'shai98m@gmail.com', 'Sdg9595@hotmail.com', 'atorbiner@gmail.com', 'galbh33@gmail.com']:
                 continue
 
             # get participant score

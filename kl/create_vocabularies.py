@@ -2,12 +2,12 @@ import sys
 import csv
 import logging
 import pandas as pd
+import config
 
 
 # create vocabularies by grouping factor
 # aggregate all text together
 class CreateVocabularies:
-
     """
     Create descriptions vocabulary regards to: vertical / traits / vertical + traits
     Save the two groups in csv files using pickle package
@@ -118,8 +118,6 @@ class CreateVocabularies:
         if not os.path.exists(self.directory_output):
             os.makedirs(self.directory_output)
 
-        # self.dir_vocabulary_name = self.directory_output + str(self.cur_time) + '/'
-
         self.dir_vocabulary_name = self.directory_output + str(self.personality_trait) + '/'
         if not os.path.exists(self.dir_vocabulary_name):
             os.makedirs(self.dir_vocabulary_name)
@@ -144,6 +142,9 @@ class CreateVocabularies:
             self.user_item_id_df = pd.read_csv(self.participants_purchase_history)  # history purchase
             self.full_user_item_id_df = self.user_item_id_df.copy(deep=True)
             self.user_item_id_df = self.user_item_id_df[['item_id', 'buyer_id']]
+
+        self.user_item_id_df['item_id'] = self.user_item_id_df['item_id'].astype(int)
+        self.full_user_item_id_df['item_id'] = self.full_user_item_id_df['item_id'].astype(int)
 
         return
 
@@ -181,12 +182,28 @@ class CreateVocabularies:
                 user_id_high_percentile_list.append(user_row['USER_ID'])
             elif user_row['USER_SLCTD_ID'] in user_name_low_percentile_list:
                 user_id_low_percentile_list.append(user_row['USER_ID'])
+            else:
+                logging.info('missing user id on mapping csv: ' + str(user_row['USER_SLCTD_ID']))
+
+        logging.info('High trait value users: '
+                     'found: ' + str(len(user_id_high_percentile_list)) +
+                     ', potential: ' + str(len(user_name_high_percentile_list)))
+
+        logging.info('low trait value users: '
+                     'found: ' + str(len(user_id_low_percentile_list)) +
+                     ', potential: ' + str(len(user_name_low_percentile_list)))
+        logging.info('')
         # item id per group
         item_id_high_percentile_list = list()
         item_id_low_percentile_list = list()
 
-        # get items per group
+        # iterate over all item description
+        # store all item id, which their buyer id in high/low groups
         for index, user_row in self.user_item_id_df.iterrows():
+
+            if index % 1000 == 0:
+                logging.info('insert item id into groups: ' + str(index) + '/' + str(self.user_item_id_df.shape[0]))
+
             if user_row['buyer_id'] in user_id_high_percentile_list:
                 item_id_high_percentile_list.append(user_row['item_id'])
             elif user_row['buyer_id'] in user_id_low_percentile_list:
@@ -197,21 +214,44 @@ class CreateVocabularies:
 
         if self.vocabulary_method == 'documents':
             cur_vocabulary_low_list = list()
+            cur_vocabulary_low_dict = dict()
+            cur_vocabulary_high_dict = dict()
             cur_vocabulary_high_list = list()
+
+            miss = 0
+            except_num = 0
             for index, row in self.description_df.iterrows():
-                if row['item_id'] in item_id_high_percentile_list:
+                if index % 1000 == 0:
+                    logging.info('insert descriptions into groups: ' +
+                                 str(index) + '/' + str(self.description_df.shape[0]))
+
+                if row['item_id'] in item_id_high_percentile_list:      # item high percentile
                     if isinstance(row['description'], basestring):
                         cur_vocabulary_high_list.append(row['description'])
+                        cur_vocabulary_high_dict[str(row['item_id'])] = row['description']
 
-                elif row['item_id'] in item_id_low_percentile_list:
+                elif row['item_id'] in item_id_low_percentile_list:     # item low percentile
                     if isinstance(row['description'], basestring):
                         cur_vocabulary_low_list.append(row['description'])
+                        cur_vocabulary_low_dict[str(row['item_id'])] = row['description']
+                else:
+                    # logging.info('missing item_id in groups: ' + str(row['item_id']))
+                    try:
+                        user_id = self.user_item_id_df.loc[self.user_item_id_df['item_id'] == row['item_id']]['buyer_id'].values[0]
+                        print(self.user_ebay_df.loc[self.user_ebay_df['USER_ID'] == user_id]['USER_SLCTD_ID'].values)
+                    except:
+                        print('except')
+                        except_num +=1
+                        pass
 
+                    miss += 1
+
+            logging.info('missing documents: ' + str(miss))
+            logging.info('except num documents: ' + str(except_num))
             logging.info('Number of Valid description in high group: ' + str(len(cur_vocabulary_high_list)))
             logging.info('Number of Valid description in low group: ' + str(len(cur_vocabulary_low_list)))
-
-            self.save_vocabulary('high_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_high_list)), cur_vocabulary_high_list)
-            self.save_vocabulary('low_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_low_list)), cur_vocabulary_low_list)
+            self.save_vocabulary('high_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_high_list)), cur_vocabulary_high_list, cur_vocabulary_high_dict)
+            self.save_vocabulary('low_' + str(self.personality_trait) + '_' + str(len(cur_vocabulary_low_list)), cur_vocabulary_low_list, cur_vocabulary_low_dict)
 
         elif self.vocabulary_method == 'aggregation':
             cur_vocabulary_high = ''
@@ -228,6 +268,8 @@ class CreateVocabularies:
 
             self.save_vocabulary('high_' + str(self.personality_trait), cur_vocabulary_high)
             self.save_vocabulary('low_' + str(self.personality_trait), cur_vocabulary_low)
+        else:
+            raise ValueError('unknown vocabulary method')
         return
 
     # split items into groups by vertical
@@ -259,16 +301,15 @@ class CreateVocabularies:
         # user id per group
         user_id_high_percentile_list = list()
         user_id_low_percentile_list = list()
+        # item id per group
+        item_id_high_percentile_list = list()
+        item_id_low_percentile_list = list()
 
         for index, user_row in self.user_ebay_df.iterrows():
             if user_row['USER_SLCTD_ID'] in user_name_high_percentile_list:
                 user_id_high_percentile_list.append(user_row['USER_ID'])
             elif user_row['USER_SLCTD_ID'] in user_name_low_percentile_list:
                 user_id_low_percentile_list.append(user_row['USER_ID'])
-
-        # item id per group
-        item_id_high_percentile_list = list()
-        item_id_low_percentile_list = list()
 
         # get items per group
         for index, user_row in self.user_item_id_df.iterrows():
@@ -353,7 +394,7 @@ class CreateVocabularies:
         return
 
     # save vocabulary per vertical
-    def save_vocabulary(self, vertical_name, cur_vocabulary):
+    def save_vocabulary(self, vertical_name, cur_vocabulary, cur_vocabulary_dict):
 
         group_file_name = str(self.dir_vocabulary_name) + str(self.vocabulary_method) + '_' \
                           + str(vertical_name) + '_' + str(self.cur_time) + '.txt'
@@ -366,6 +407,19 @@ class CreateVocabularies:
 
         with open(group_file_name, 'wb') as fp:
             pickle.dump(cur_vocabulary, fp)
+
+        logging.info("Save file: " + str(group_file_name))
+        logging.info("")
+
+        #########################
+
+        group_file_name = str(self.dir_vocabulary_name) + str(self.vocabulary_method) + '_' \
+                          + str(vertical_name) + '_' + str(self.cur_time) + '_dict.txt'
+
+        import pickle
+
+        with open(group_file_name, 'wb') as fp:
+            pickle.dump(cur_vocabulary_dict, fp)
 
         logging.info("Save file: " + str(group_file_name))
         logging.info("")
@@ -390,19 +444,22 @@ def main(description_file, log_dir, directory_output, split_method, gap_value, v
 
 if __name__ == '__main__':
 
-    # description_file = '../data/descriptions_data/1425 users input/clean_9405.csv'  # html clean description
-    # description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951.csv'  # html clean description
-    description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951_time_2018-06-16 16:54:11.csv'
+    # description_file = '../data/descriptions_data/1425 users input/clean_balance_8645_2018-06-17 15:18:11.csv'
+    description_file = '../results/data/truncate_description/7537_2018-08-02 11:12:34.csv'
+    # description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951_time_2018-06-16 16:54:11.csv'
+    # description_file = '../data/descriptions_data/1425 users input/clean_pos_str_8951_time_2018-06-17 05:55:26.csv'
 
     log_dir = 'log/'
     directory_output = '../results/vocabulary/'
     vocabulary_method = 'documents'         # 'documents', 'aggregation'
     verbose_flag = True
     split_method = 'traits'                 # 'vertical', 'traits', 'traits_vertical'
-    gap_value = 0.5                         # must be a float number between zero to one
+    gap_value = 0.1                         # must be a float number between zero to one
 
     # users with their BFI score + percentile
-    participants_survey_data = '../data/participant_data/1425 users input/participant_bfi_score/users_with_bfi_score_amount_1425.csv'
+    # participants_survey_data = '../data/participant_data/1425 users input/participant_bfi_score/users_with_bfi_score_amount_1425.csv'
+
+    participants_survey_data = '../results/BFI_results/participant_bfi_score_check_duplication/clean_participant_958_2018-06-17 08:58:21.csv'
 
     # valid users name -> user_id   # TODO insert only real valid users (no duplication, remove fake users)
     participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
