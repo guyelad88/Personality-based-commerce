@@ -1,6 +1,7 @@
 from time import gmtime, strftime
 from utils.logger import Logger
-from utils_function import UtilsFunction
+from utils_balance_description import BalanceDescription
+from utils_filter_description import FilterDescription
 import config
 
 
@@ -32,25 +33,47 @@ class RunPreProcessing:
         3. balance data - truncate descriptions per user
         4. NLP pre-process steps - tokenizer/POS
         """
+
+        merge_df_path = '../results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'
+
         Logger.info('start pre-process global method')
         # clean users
         if self.configuration['remove_fake_users']:
+            # TODO process already inside survey_pilot/extract_BFI_score.py
             pass
 
         if self.configuration['remove_duplication']:
+            # TODO process already inside survey_pilot/extract_BFI_score.py
             pass
 
+        if self.configuration['filter_description']:
+            Logger.info('filter description (language, length, etc..)')
+
+            # merge_df_path = '../data/descriptions_data/1425 users input/merge_20048_time_2018-06-13 11:07:46.csv'
+            merge_df_path = FilterDescription.filter_descriptions(
+                merge_df=merge_df_path,
+                log_file_name=self.log_file_name,
+                level='info')
+
+        # update path of merge_df
         # balance data
         if self.configuration['balance_description_per_user']:
 
             Logger.info('balance number of description per user')
-            merge_df_path = '../results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'
-            UtilsFunction.truncate_description_per_user_merged(
+            # merge_df_path = '../results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'  # TODO update path
+            merge_df_path = BalanceDescription.truncate_description_per_user_merged(
                 merge_df_path=merge_df_path,
                 log_file_name=self.log_file_name,
+                level='info',
                 max_desc=None)
 
-        
+        if self.configuration['POS_filter']:
+
+            Logger.info('add POS description column')
+
+        Logger.info('finish pre-processing')
+
+
 
         # NLP methods
 
