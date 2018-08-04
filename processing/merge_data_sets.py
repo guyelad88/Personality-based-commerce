@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 from time import gmtime, strftime
 from utils.logger import Logger
@@ -104,11 +106,19 @@ class MergeDataSet:
 
     def _save_df(self, intermediate_df):
 
-        file_path = './results/data/merge_df_shape_{}_{}_time_{}.csv'.format(
+        dir_path = '../results/data/merge_user_purchase_description/'
+
+        file_name = '{}_{}_time_{}.csv'.format(
             str(intermediate_df.shape[0]),
             str(intermediate_df.shape[1]),
             str(self.time)
         )
+
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        file_path = '{}{}'.format(dir_path, file_name)
+
         intermediate_df.to_csv(file_path, index=False)
         Logger.debug('save csv file: ' + str(file_path))
 
@@ -116,15 +126,15 @@ class MergeDataSet:
 def main():
 
     # currently, before and filtering
-    description_file = './data/descriptions_data/1425 users input/merge_20048_time_2018-06-13 11:07:46.csv'
+    description_file = '../data/descriptions_data/1425 users input/merge_20048_time_2018-06-13 11:07:46.csv'
     # description_path = './data/descriptions_data/1425 users input/clean_12902.csv'        # after filtering
 
-    user_purchase = './data/participant_data/1425 users input/Purchase History format item_id.csv'
-    map_user_name_id = './data/participant_data/1425 users input/personality_valid_users.csv'           # insert new one (check Kira is missing e.g.)
+    user_purchase = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
+    map_user_name_id = '../data/participant_data/1425 users input/personality_valid_users.csv'           # insert new one (check Kira is missing e.g.)
     # user_bfi_score = './data/participant_data/1425 users input/users_with_bfi_score_amount_1425.csv'
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_987_2018-06-20 15:36:11.csv'    # remove threshold 0.5, length below 5
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_961_2018-06-20 16:46:36.csv'
-    user_bfi_score = './results/BFI_results/participant_bfi_score_check_duplication/clean_participant_985_2018-06-20 16:50:15.csv'
+    user_bfi_score = '../results/BFI_results/participant_bfi_score_check_duplication/clean_participant_985_2018-06-20 16:50:15.csv'
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_1080_2018-06-20 15:32:02.csv'
 
     merge_data_sets = MergeDataSet(description_file, user_purchase, user_bfi_score, map_user_name_id)

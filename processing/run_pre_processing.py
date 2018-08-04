@@ -2,6 +2,7 @@ from time import gmtime, strftime
 from utils.logger import Logger
 from utils_balance_description import BalanceDescription
 from utils_filter_description import FilterDescription
+from utils_pos import UtilsPOS
 import config
 
 
@@ -34,7 +35,7 @@ class RunPreProcessing:
         4. NLP pre-process steps - tokenizer/POS
         """
 
-        merge_df_path = '../results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'
+        merge_df_path = '../results/data/merge_user_purchase_description/13336_88_time_2018-08-03 15:37:52.csv'
 
         Logger.info('start pre-process global method')
         # clean users
@@ -70,10 +71,12 @@ class RunPreProcessing:
         if self.configuration['POS_filter']:
 
             Logger.info('add POS description column')
+            merge_df_path = UtilsPOS.convert_to_pos(
+                merge_df_path=merge_df_path,
+                log_file_name=self.log_file_name,
+                level='info')
 
         Logger.info('finish pre-processing')
-
-
 
         # NLP methods
 

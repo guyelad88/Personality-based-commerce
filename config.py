@@ -4,7 +4,7 @@ pre_processing_configs = {
     'remove_duplication': True,         # currently under extract_bfi_score
     'remove_fake_users': True,          # currently under extract_bfi_score
 
-    'POS_filter': False,
+    'POS_filter': True,
     'Number_filter': False,
 
     'filter_description': True,
@@ -40,5 +40,7 @@ filter_description = {
 
 # POS properties
 POS = {
-    'VALID_POS': ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS']
+    'VALID_POS': ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS'],  # save only this POS in addition
+    'filter_pos_flag': True,    # save in addition only a specific list of POS
+    'save_pos': True            # save POS or words
 }
