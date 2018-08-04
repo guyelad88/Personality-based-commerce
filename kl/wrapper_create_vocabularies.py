@@ -1,8 +1,5 @@
-import sys
-import csv
-import logging
 import pandas as pd
-from create_vocabularies import CreateVocabularies
+from processing.create_vocabularies import CreateVocabularies
 
 
 # create vocabularies by grouping factor

@@ -4,20 +4,20 @@ pre_processing_configs = {
     'remove_duplication': True,         # currently under extract_bfi_score
     'remove_fake_users': True,          # currently under extract_bfi_score
 
-    'POS_filter': True,
-    'Number_filter': False,
-
     'filter_description': True,
-    'balance_description_per_user': True
+    'balance_description_per_user': True,
+
+    'POS_filter': True,
+    'Number_filter': False,              # TODO add this
+
+    'analyze_PT_groups': True           # add 'L'/'M'/'H' to each PT
 }
 
 # indicate how to build the vocabularies (e.g. extroversion vs. introversion)
 create_vocabularies = {
-    'directory_output': '../results/vocabulary/',
     'vocabulary_method': 'documents',       # 'documents', 'aggregation'
-    'verbose_flag': True,
     'split_method': 'traits',               # 'vertical', 'traits', 'traits_vertical'
-    'gap_value': 0.1,                       # must be a float number between zero to one
+    'gap_value': 0.4,                       # must be a float number between zero to one
     'personality_trait': 'extraversion',  # 'agreeableness' 'extraversion' 'openness' 'conscientiousness' 'neuroticism'
     'vertical': '',                         # 'Fashion'
 }
@@ -30,7 +30,7 @@ extract_big_five_inventory_score = {
 
 # determine how to filter descriptions
 filter_description = {
-    'MAX_LENGTH': 500,
+    'MAX_LENGTH': 1000,
     'MIN_LENGTH': 15,
     'DROP_NA': True,
     'DROP_MIN': True,
@@ -44,3 +44,5 @@ POS = {
     'filter_pos_flag': True,    # save in addition only a specific list of POS
     'save_pos': True            # save POS or words
 }
+
+personality_trait = ['agreeableness', 'extraversion', 'openness', 'conscientiousness', 'neuroticism']

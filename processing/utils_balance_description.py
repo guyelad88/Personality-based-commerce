@@ -64,7 +64,7 @@ class BalanceDescription:
 
         # filter redundant description
         Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
-        merge_df = merge_df[~merge_df.truncate_description]
+        merge_df = merge_df[~merge_df.truncate_description]     # remove redundant descriptions
         Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
 
         # show distribution after filtering redundant description
@@ -94,7 +94,7 @@ class BalanceDescription:
             os.makedirs(dir_path)
 
         file_path = '{}{}'.format(dir_path, file_name)
-        df.to_csv(file_path)
+        df.to_csv(file_path, index=False)
         Logger.info('{}: {}'.format(log_title, str(file_name)))
 
         return file_path
@@ -112,11 +112,16 @@ class BalanceDescription:
     def _plot_histogram(a, user_amount, desc_num, additional_str, bin=100):
         """ generic file to plot histogram and save plot """
 
+        plt_dir = '../results/pre-processing/balance_description/'
+        if not os.path.exists(plt_dir):
+            os.makedirs(plt_dir)
+
         plt.style.use('seaborn-deep')
         plt.hist(a, bins=bin)
         plt.title('description per user {}'.format(additional_str))
 
-        plot_path = '../results/utils/HistogramUserDescriptionAmount_user_{}_desc_{}{}.png'.format(
+        plot_path = '{}HistogramUserDescriptionAmount_user_{}_desc_{}{}.png'.format(
+            plt_dir,
             str(user_amount),
             str(desc_num),
             additional_str)

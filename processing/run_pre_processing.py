@@ -1,8 +1,11 @@
 from time import gmtime, strftime
+
 from utils.logger import Logger
 from utils_balance_description import BalanceDescription
 from utils_filter_description import FilterDescription
 from utils_pos import UtilsPOS
+from create_vocabularies import CreateVocabularies
+
 import config
 
 
@@ -14,9 +17,8 @@ class RunPreProcessing:
     def __init__(self):
 
         self.time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        self.verbose_flag = True
         self.configuration = config.pre_processing_configs      # configuration of pre-process steps
-        self.log_file_name = str()                              # allow access to global log file name
+        self.log_file_name = str()                              # allow access to the global log file name
 
     def init_debug_log(self):
         """ create a Logger object and save log in a file """
@@ -30,12 +32,13 @@ class RunPreProcessing:
         run pre-process steps
         main process:
         1. remove all fake/inconsistent users
-        2. remove bad descriptions (non-english/na/too short/long)
-        3. balance data - truncate descriptions per user
-        4. NLP pre-process steps - tokenizer/POS
+        2. remove bad descriptions (non-english/na/too short/long) - FilterDescription
+        3. balance data - truncate descriptions per user - BalanceDescription
+        4. NLP pre-process steps - tokenizer/POS - UtilsPOS
         """
 
-        merge_df_path = '../results/data/merge_user_purchase_description/13336_88_time_2018-08-03 15:37:52.csv'
+        # main argument: output of merge_data_sets df
+        merge_df_path = '../results/data/merge_user_purchase_description/13336_88_time_2018-08-04 17:50:30.csv'
 
         Logger.info('start pre-process global method')
         # clean users
@@ -56,12 +59,10 @@ class RunPreProcessing:
                 log_file_name=self.log_file_name,
                 level='info')
 
-        # update path of merge_df
-        # balance data
+        # balance data, truncate maximum number of description per user
         if self.configuration['balance_description_per_user']:
 
             Logger.info('balance number of description per user')
-            # merge_df_path = '../results/data/merge_df_shape_13336_88_time_2018-08-01 20:43:24.csv'  # TODO update path
             merge_df_path = BalanceDescription.truncate_description_per_user_merged(
                 merge_df_path=merge_df_path,
                 log_file_name=self.log_file_name,
@@ -76,8 +77,17 @@ class RunPreProcessing:
                 log_file_name=self.log_file_name,
                 level='info')
 
-        Logger.info('finish pre-processing')
+        #
+        if self.configuration['analyze_PT_groups']:
 
+            Logger.info('add personality trait group columns (L/M/H)')
+            merge_df_path = CreateVocabularies.traits_split_item_into_groups(
+                merge_df_path=merge_df_path,
+                log_file_name=self.log_file_name,
+                level='info')
+
+        Logger.info('final DF save to a file: {}'.format(merge_df_path))
+        Logger.info('finish pre-processing')
         # NLP methods
 
 

@@ -1,5 +1,4 @@
 import os
-
 import pandas as pd
 from time import gmtime, strftime
 from utils.logger import Logger
@@ -18,18 +17,16 @@ class MergeDataSet:
         :param map_user_name_id: mapping of user_id - user_name
         """
         self.time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        self.log_dir = 'log/'
-        self.verbose_flag = True
 
         self.description_file = description_file    # item id with description
         self.user_purchase = user_purchase          # all transaction (purchase) history
         self.user_bfi_score = user_bfi_score        # user with BFI score
         self.map_user_name_id = map_user_name_id    # map of user_name - user_id
 
-        self.description_df = pd.DataFrame()        # item id with description
-        self.user_purchase_df = pd.DataFrame()      # all transaction (purchase) history
+        self.description_df = pd.DataFrame()            # item id with description
+        self.user_purchase_df = pd.DataFrame()          # all transaction (purchase) history
         self.user_bfi_score_df = pd.DataFrame()         # user with BFI score
-        self.map_user_name_id_df = pd.DataFrame()      # map user_name - user_id
+        self.map_user_name_id_df = pd.DataFrame()       # map user_name - user_id
 
     def init_debug_log(self):
         """ create a Logger object and save log in a file """
@@ -130,11 +127,13 @@ def main():
     # description_path = './data/descriptions_data/1425 users input/clean_12902.csv'        # after filtering
 
     user_purchase = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
-    map_user_name_id = '../data/participant_data/1425 users input/personality_valid_users.csv'           # insert new one (check Kira is missing e.g.)
+    map_user_name_id = '../data/participant_data/1425 users input/personality_valid_users.csv'
+    user_bfi_score = '../results/BFI_results/participant_bfi_score_check_duplication/clean_participant_985_2018-06-20 16:50:15.csv'
+
+
     # user_bfi_score = './data/participant_data/1425 users input/users_with_bfi_score_amount_1425.csv'
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_987_2018-06-20 15:36:11.csv'    # remove threshold 0.5, length below 5
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_961_2018-06-20 16:46:36.csv'
-    user_bfi_score = '../results/BFI_results/participant_bfi_score_check_duplication/clean_participant_985_2018-06-20 16:50:15.csv'
     # user_bfi_score = './results/BFI_results//participant_bfi_score_check_duplication/clean_participant_1080_2018-06-20 15:32:02.csv'
 
     merge_data_sets = MergeDataSet(description_file, user_purchase, user_bfi_score, map_user_name_id)
