@@ -68,3 +68,5 @@ personality_trait = ['agreeableness', 'extraversion', 'openness', 'conscientious
 balance_description = {
     'percentile_truncated': 95
 }
+
+

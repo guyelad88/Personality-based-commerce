@@ -93,7 +93,10 @@ class RunPreProcessing:
 
         if self.configuration['calculate_KL']:
             Logger.info('calculate KL between each trait groups')
-            calc_obj = CalculateKL(merge_df_path)
+            calc_obj = CalculateKL(
+                merge_df_path=merge_df_path,
+                log_file_name=self.log_file_name,
+                level='info')
             calc_obj.run_kl()
 
 def main():

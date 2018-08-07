@@ -65,11 +65,9 @@ class CalculateKL:
 
     """
 
-    def __init__(self, merge_df_path):
+    def __init__(self, merge_df_path, log_file_name, level='info'):
 
-        # arguments
-        # self.description_file_p = description_file_p    # description file
-        # self.description_file_q = description_file_q    # description file
+        Logger.set_handlers('AddPersonalityTraitGroups', log_file_name, level=level)
 
         self.merge_df_path = merge_df_path
 
@@ -133,6 +131,7 @@ class CalculateKL:
         if not os.path.exists(RESULT_DIR):
             os.makedirs(RESULT_DIR)
 
+        """
         if not os.path.exists(self.dir_excel_token_appearance):
             os.makedirs(self.dir_excel_token_appearance)
 
@@ -141,6 +140,7 @@ class CalculateKL:
 
         if not os.path.exists(self.dir_top_k_word):
             os.makedirs(self.dir_top_k_word)
+        """
 
     # main function - load vocabularies regards to vocabulary method
     def run_kl(self):
@@ -165,13 +165,13 @@ class CalculateKL:
     def _init_class_variables(self, pt):
 
         # token and all the description he appears in
-        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, pt)
+        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, self.cur_time)
 
         # input to Lex-rank algorithm (word + value)
         self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, self.cur_time)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, pt)
+        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, self.cur_time)
 
         self.corpus = list()  # corpus contain two languagas models
         self.vectorizer = list()  # transform words into vectors of numbers using sklearn
@@ -207,6 +207,7 @@ class CalculateKL:
         """
 
         merge_df = pd.read_csv(self.merge_df_path)
+        merge_df = merge_df.head(500)    # for debugging
 
         dict_personality_values_df = {k: v for k, v in merge_df.groupby('{}_group'.format(pt))}
 
@@ -224,10 +225,10 @@ class CalculateKL:
                 user_amount,
                 desc_num))
 
-        self.text_list_list_p = dict_personality_values_df['H']['description']
+        self.text_list_list_p = dict_personality_values_df['H']['description']      # .tolist()
         self.file_name_p = 'High'
 
-        self.text_list_list_q = dict_personality_values_df['L']['description']
+        self.text_list_list_q = dict_personality_values_df['L']['description']      # .tolist()
         self.file_name_q = 'Low'
 
     # load vocabulary support aggregation method - KLPost
@@ -529,8 +530,13 @@ class CalculateKL:
             sheet1.write(idx + 1, 5, str(round(frac_q, 3)))
 
         # save top k token with counting
-        excel_file_name = '{}K_{}_Smooth_{}_{}_{}_top_{}_{}.xls'.format(
-            self.dir_top_k_word, str(TOP_K_WORDS), str(SMOOTHING_FACTOR),
+
+        dir_name = '{}'.format(self.dir_top_k_word)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
+        excel_file_name = '{}{}_K_{}_Smooth_{}_{}_{}_top_{}_{}.xls'.format(
+            dir_name, self.pt, str(TOP_K_WORDS), str(SMOOTHING_FACTOR),
             str(VOCABULARY_METHOD), str(name), str(TOP_K_WORDS),  str(self.cur_time)
         )
 
@@ -618,21 +624,23 @@ class CalculateKL:
         book = xlwt.Workbook(encoding="utf-8")
 
         # P distribution
-        sheet1 = book.add_sheet('P_{}'.format(str(tf_p)))
+        sheet1 = book.add_sheet('P_{}'.format(str(tf_p)), cell_overwrite_ok=True)
         sheet1.write(0, 0, 'Item index')
         sheet1.write(0, 1, 'Item description')
         row_p_i = 0
         cur_word_doc_counter = 0
         cnt = 0
         for row in X_dense_binary_p:
-            if cnt > 10:
+            if cnt > FIND_WORD_DESCRIPTION_K:
                 break
             cur_row_list = np.array(row)[0].tolist()  # binary list - 1 if word in descriptions
             if cur_row_list[tup[0]] > 0:        # iterate over all description, extract where '1' on the token
                 cur_word_doc_counter += 1
                 cnt += 1
                 sheet1.write(cur_word_doc_counter, 0, row_p_i)
-                sheet1.write(cur_word_doc_counter, 1, p_text_list[row_p_i])
+
+                assert str(cur_word) in p_text_list.iloc[row_p_i]
+                sheet1.write(cur_word_doc_counter, 1, p_text_list.iloc[row_p_i])
             row_p_i += 1
 
         # assert cur_word_doc_counter == tf_p
@@ -646,20 +654,22 @@ class CalculateKL:
             cnt = 0
             cur_word_doc_counter = 0
             for row in X_dense_binary_q:
-                if cnt > 10:
+                if cnt > FIND_WORD_DESCRIPTION_K:
                     break
                 cur_row_list = np.array(row)[0].tolist()  # binary list - 1 if word in descriptions
                 if cur_row_list[q_idx] > 0:
                     cur_word_doc_counter += 1
                     sheet2.write(cur_word_doc_counter, 0, row_q_i)
-                    sheet2.write(cur_word_doc_counter, 1, q_text_list[row_q_i])
+
+                    assert str(cur_word) in q_text_list.iloc[row_q_i]
+                    sheet2.write(cur_word_doc_counter, 1, q_text_list.iloc[row_q_i])
                     cnt +=1
                 row_q_i += 1
 
             # assert cur_word_doc_counter == tf_q
 
         # directory with file to each token
-        cur_dir = '{}_{}_{}_{}/'.format(
+        cur_dir = '{}{}_{}_{}/'.format(
             self.dir_excel_token_appearance, str(self.pt), str(excel_name), str(self.cur_time))
 
         if not os.path.exists(cur_dir):
@@ -672,6 +682,7 @@ class CalculateKL:
         book.save(excel_file_name)
         Logger.info('save descriptions for top-k token in file: ' + str(excel_file_name))
 
+    # TODO not in use
     def save_descriptions_contain_terms(self, cur_word, tf_p, tf_q, p_text_list, q_text_list):
 
         book = xlwt.Workbook(encoding="utf-8")
@@ -679,8 +690,7 @@ class CalculateKL:
         counter_p = 0
         for idx_p, description_p in enumerate(p_text_list):
             if cur_word in description_p:
-                # find top k tokens
-                sheet1.write(counter_p + 1, 1, description_p)
+                sheet1.write(counter_p + 1, 1, description_p)       # find top k tokens
                 counter_p += 1
 
         sheet2 = book.add_sheet('Q')
@@ -690,8 +700,7 @@ class CalculateKL:
                 sheet2.write(counter_q + 1, 1, description_q)
                 counter_q += 1
 
-        excel_file_name = self.excel_token_dir + 'word_' + str(cur_word) + '_' + str(self.cur_time) + '.xls'
-
+        excel_file_name = '{}word_{}_{}.xls'.format(self.excel_token_dir, str(cur_word), self.cur_time)
         book.save(excel_file_name)
         Logger.info('save kl in file: ' + str(excel_file_name))
 
@@ -724,10 +733,14 @@ class CalculateKL:
             file.write(json.dumps(KL_CONFIGURATION_DICT))
 
 
-def main(merge_df_path):
+def main(merge_df_path, log_file_name):
 
     # init class
-    create_vocabularies_obj = CalculateKL(merge_df_path=merge_df_path)
+    create_vocabularies_obj = CalculateKL(
+        merge_df_path=merge_df_path,
+        log_file_name=log_file_name,
+        level='info'
+    )
 
     create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
@@ -771,5 +784,7 @@ if __name__ == '__main__':
     # trait = 'neuroticism'
 
     # merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
-    merge_df_path = '../results/data/vocabularies/5457_2018-08-07 13:16:33.csv'
-    main(merge_df_path)
+    file_prefix = 'run_kl'
+    log_file_name = '../log/{}_{}.log'.format(file_prefix, strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+    merge_df_path = '../results/data/vocabularies/5457_2018-08-07 15:06:22.csv'
+    main(merge_df_path, log_file_name)
