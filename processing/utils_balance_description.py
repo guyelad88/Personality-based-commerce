@@ -2,8 +2,12 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import config
+
 from time import gmtime, strftime
 from utils.logger import Logger
+
+PERCENTILE_MAX_TRUNCATED = config.balance_description['percentile_truncated']            # present top words (30)
 
 
 class BalanceDescription:
@@ -44,8 +48,8 @@ class BalanceDescription:
 
         # choose maximum number of description per user
         if max_desc is None:
-            max_desc = int(round(np.percentile(a, 95)))
-        Logger.info('maximum number of description per user: ' + str(max_desc))
+            max_desc = int(round(np.percentile(a, PERCENTILE_MAX_TRUNCATED)))
+        Logger.info('maximum number of description per user: {}'.format(str(max_desc)))
 
         # truncate descriptions
         merge_df['truncate_description'] = True
@@ -129,7 +133,7 @@ class BalanceDescription:
         plt.savefig(plot_path)
         plt.close()
 
-        Logger.info('save histogram plot: ' + str(plot_path))
+        Logger.info('save histogram plot: {}'.format(str(plot_path)))
 
     @staticmethod
     def _merge_to_csv(csv_1_path, csv_2_path):

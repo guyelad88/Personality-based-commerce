@@ -1,9 +1,12 @@
 import os
 import sys
 import csv
+import traceback
+import matplotlib.pyplot as plt
+import numpy
+import pandas as pd
 import xlwt
 import copy
-import logging
 import operator
 import ntpath
 import scipy
@@ -12,14 +15,27 @@ from time import gmtime, strftime
 
 from sklearn.feature_extraction.text import CountVectorizer
 
+from utils.logger import Logger
+import config
 
-TOP_K_WORDS = 30           # present top words
-SMOOTHING_FACTOR = 1.0     # smoothing factor for calculate term contribution
+TOP_K_WORDS = config.calculate_kl['TOP_K_WORDS']            # present top words (30)
+SMOOTHING_FACTOR = config.calculate_kl['SMOOTHING_FACTOR']  # smoothing factor for calculate term contribution (1.0)
+NGRAM_RANGE = config.calculate_kl['NGRAM_RANGE']
+VOCABULARY_METHOD = config.calculate_kl['VOCABULARY_METHOD']  # KL methods: aggregate all documents
+TRAIT = config.calculate_kl['TRAIT']
+
+NORMALIZE_CONTRIBUTE_FLAG = config.calculate_kl['NORMALIZE_CONTRIBUTE']['flag']
+NORMALIZE_CONTRIBUTE_TYPE = config.calculate_kl['NORMALIZE_CONTRIBUTE']['type']         # TODO not in use
+
+FIND_WORD_DESCRIPTION_FLAG = config.calculate_kl['FIND_WORD_DESCRIPTION']['flag']
+FIND_WORD_DESCRIPTION_K = config.calculate_kl['FIND_WORD_DESCRIPTION']['k']             # TODO not in use
+
+PERSONALITY_TRAIT = config.personality_trait        # list of personality traits
+
+RESULT_DIR = '../results/kl/'
 
 
-# input: two descriptions file represent all texts of specific traits/vertical
-# output: KL divergence of language model + contribute words for KL metric
-class CreateVocabularies:
+class CalculateKL:
 
     """
         calculate KL-contribute between to verticals/traits distribution (e.g. vocabulary of high/low extroversion)
@@ -28,11 +44,6 @@ class CreateVocabularies:
     Args:
         description_file_p: first group - csv with description
         description_file_q: second group - csv with description
-        log_dir: to build log file
-        results_dir: where to save excel file
-        results_dir_title: name to output file
-        vocabulary_method: KL methods: aggregate all documents or split documents klPost, klCalc
-        verbose_flag: whether to print the log
         trait:
         vertical:
         p_title=None
@@ -53,23 +64,18 @@ class CreateVocabularies:
 
     """
 
-    def __init__(self, description_file_p, description_file_q, log_dir, results_dir, vocabulary_method,
-                 results_dir_title, verbose_flag, normalize_contribute, find_word_description,
-                 ngram_range=(1, 1), trait='', vertical='', p_title=None, q_title=None):
+    def __init__(self, merge_df_path, trait='', p_title=None, q_title=None):
 
         # arguments
-        self.description_file_p = description_file_p    # description file
-        self.description_file_q = description_file_q    # description file
-        self.log_dir = log_dir                          # log directory
-        self.results_dir = results_dir                  # result directory
-        self.vocabulary_method = vocabulary_method      # cal klPost, klCalc
-        self.results_dir_title = results_dir_title      # init name to results file
-        self.verbose_flag = verbose_flag                # print results in addition to log file
-        self.normalize_contribute = normalize_contribute    # whether to normalize coeff and the normalized type
-        self.find_word_description = find_word_description  # store the description the words appear in
+        # self.description_file_p = description_file_p    # description file
+        # self.description_file_q = description_file_q    # description file
+
+        self.merge_df_path = merge_df_path
         self.trait = trait
-        self.vertical = vertical
-        self.ngram_range = ngram_range
+
+        # TODO remove
+        p_title = 'ppp_tochange'
+        q_title = 'qqq_tochange'
 
         if p_title is not None:             # mostly contain high/low
             self.file_name_p = p_title
@@ -81,16 +87,16 @@ class CreateVocabularies:
         else:
             self.file_name_q = ntpath.basename(self.description_file_q)[:-4].split('_')[1]
 
-        self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())         # global time to all folders
 
         # token and all the description he appears in
-        self.dir_excel_token_appearance = self.results_dir + 'token/' + self.trait + '/'
+        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, TRAIT)
 
         # input to Lex-rank algorithm (word + value)
-        self.dir_all_words_contribute = self.results_dir + 'all_words_contribute/' + self.trait + '/'
+        self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, TRAIT)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = self.results_dir + 'top_k/' + self.trait + '/'
+        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, TRAIT)
 
         self.corpus = list()        # corpus contain two languagas models
         self.vectorizer = list()    # transform words into vectors of numbers using sklearn
@@ -119,48 +125,28 @@ class CreateVocabularies:
         self.normalize_p = list()
         csv.field_size_limit(sys.maxsize)
 
-    # build log object
     def init_debug_log(self):
 
-        lod_file_name = self.log_dir + 'calculate_kl_' + str(self.cur_time) + '.log'
-
-        # logging.getLogger().addHandler(logging.StreamHandler())
-
-        logging.basicConfig(filename=lod_file_name,
-                            format='%(asctime)s, %(levelname)s %(message)s',
-                            datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
-
-        # print result in addition to log file
-        if self.verbose_flag:
-            stderrLogger = logging.StreamHandler()
-            stderrLogger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-            logging.getLogger().addHandler(stderrLogger)
-
-        logging.info("start log program")
+        file_prefix = 'calculate_kl'
+        log_file_name = '../log/{}_{}.log'.format(file_prefix, self.cur_time)
+        Logger.set_handlers('CalculateKL', log_file_name, level='debug')
 
     def check_input(self):
 
-        if self.vocabulary_method not in ['documents', 'aggregation']:
-            raise ValueError('vocabulary method: ' + str(self.vocabulary_method) + ' is not defined')
+        if VOCABULARY_METHOD not in ['documents', 'aggregation']:
+            raise ValueError('vocabulary method: {} is not defined'.format(str(VOCABULARY_METHOD)))
 
-        if self.trait not in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']:
+        if TRAIT not in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']:
             raise ValueError('trait value must be one of the BF personality trait, using to create output directory')
 
-        if self.ngram_range[0] > self.ngram_range[1]:
-            raise ValueError('n gram is not valid: ' + str(self.ngram_range))
+        if NGRAM_RANGE[0] > NGRAM_RANGE[1]:
+            raise ValueError('n gram is not valid: {}'.format(str(NGRAM_RANGE)))
 
-        if 'type' not in self.normalize_contribute or 'flag' not in self.normalize_contribute:
-            raise ValueError('attributes missing in normalized contributes dictionary')
-
-        if 'k' not in self.find_word_description or 'flag' not in self.find_word_description:
-            raise ValueError('attributes missing in find word description dictionary')
+        if not os.path.exists(RESULT_DIR):
+            os.makedirs(RESULT_DIR)
 
         if not os.path.exists(self.dir_excel_token_appearance):
             os.makedirs(self.dir_excel_token_appearance)
-
-        if not os.path.exists(self.results_dir):
-            os.makedirs(self.results_dir)
 
         if not os.path.exists(self.dir_all_words_contribute):
             os.makedirs(self.dir_all_words_contribute)
@@ -171,39 +157,102 @@ class CreateVocabularies:
     # main function - load vocabularies regards to vocabulary method
     def run_kl(self):
 
-        if self.vocabulary_method == 'documents':
-            self.load_vocabulary_vector_documents()             # load documents + save attributes to later computation
-            self.calculate_kl_and_language_models_documents()
-        elif self.vocabulary_method == 'aggregation':
+        if VOCABULARY_METHOD == 'documents':
+
+            # iterate over all personality traits and calculate KL
+            for pt in PERSONALITY_TRAIT:
+
+                self._init_class_variables(pt)                  # init all class variables
+                self._load_vocabulary_groups(pt)                # extract two df regards to column value
+                self.load_vocabulary_vector_documents()         # load documents + save attributes to later computation
+                self.calculate_kl_and_language_models_documents()
+
+        elif VOCABULARY_METHOD == 'aggregation':
+            raise ValueError('currently only vocabulary method document is supported')
             self.load_vocabulary_vector_aggregation()
             self.calculate_kl_and_language_models_aggregation()
+
+    def _init_class_variables(self, pt):
+
+        # token and all the description he appears in
+        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, pt)
+
+        # input to Lex-rank algorithm (word + value)
+        self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, self.cur_time)
+
+        # top k words with highest contribute and further explanation
+        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, pt)
+
+        self.corpus = list()  # corpus contain two languagas models
+        self.vectorizer = list()  # transform words into vectors of numbers using sklearn
+        self.X = list()  # sparse vector represent vocabulary words
+        self.X_dense = list()  # dense vector represent vocabulary words
+
+        self.X_dense_p = list()  # dense tf for p distribution
+        self.X_dense_q = list()  # dense tf for q distribution
+        self.X_dense_kl = list()  # matrix contain two dense vectors for kl
+
+        self.X_dense_binary_p = np.matrix([])
+        self.X_dense_binary_q = np.matrix([])
+
+        self.text_list_list_p = list()
+        self.text_list_list_q = list()
+
+        # documents method
+        self.count_vec_p = CountVectorizer()
+        self.count_vec_q = CountVectorizer()
+        self.occurrence_doc_sum_p = list()
+        self.occurrence_doc_sum_q = list()
+        self.len_p = int  # number of posts
+        self.len_q = int  # number of posts
+
+        self.normalize_q = list()  # normalize
+        self.normalize_p = list()
+
+    def _load_vocabulary_groups(self, pt):
+        """
+        split data regards to specific personality trait to H and L values
+        :argument: pt personality trait string name
+        :return: two DF - one to each group
+        """
+
+        merge_df = pd.read_csv(self.merge_df_path)
+
+        dict_personality_values_df = {k: v for k, v in merge_df.groupby('{}_group'.format(pt))}
+
+        for group_type, group in dict_personality_values_df.items():
+            # log statistics and save histogram
+            item_amount_per_users = group['buyer_id'].value_counts().tolist()
+
+            user_amount = group['buyer_id'].nunique()
+            desc_num = group.shape[0]
+            self._plot_histogram(
+                np.array(item_amount_per_users), user_amount, desc_num, group_type, pt=pt)
+
+            Logger.info('{}: unique users: {}, num description: {}'.format(
+                group_type,
+                user_amount,
+                desc_num))
+
+        self.text_list_list_p = dict_personality_values_df['H']['description']
+        self.text_list_list_q = dict_personality_values_df['L']['description']
 
     # load vocabulary support aggregation method - KLPost
     def load_vocabulary_vector_documents(self):
 
-        import pickle
-        import scipy
-        import numpy
+        self.len_p = np.float(len(self.text_list_list_p))
+        Logger.info('P #of items descriptions: {}'.format(str(self.len_p)))
 
-        with open(self.description_file_p, 'rb') as fp:
-            text_list_list_p = pickle.load(fp)
-            self.text_list_list_p = text_list_list_p.value        # all items in p
-            self.len_p = np.float(len(text_list_list_p))
-            logging.info('P #of items descriptions: ' + str(self.len_p))
-
-        with open(self.description_file_q, 'rb') as fp:
-            text_list_list_q = pickle.load(fp)
-            self.text_list_list_q = text_list_list_q        # all items in q
-            self.len_q = np.float(len(text_list_list_q))
-            logging.info('Q #of items descriptions: ' + str(self.len_q))
+        self.len_q = np.float(len(self.text_list_list_q))
+        Logger.info('Q #of items descriptions: {}'.format(str(self.len_q)))
 
         #  P distribution
         self.count_vec_p = CountVectorizer(
-            ngram_range=self.ngram_range,   # (1, 2),
+            ngram_range=NGRAM_RANGE,
             stop_words='english',
             lowercase=True
         )
-        X_train_counts_p = self.count_vec_p.fit_transform(text_list_list_p)   # count occurrence per word in documents
+        X_train_counts_p = self.count_vec_p.fit_transform(self.text_list_list_p)   # count occurrence per word in documents
         X_dense_p = scipy.sparse.csr_matrix.todense(X_train_counts_p)   # dense transformation
         X_dense_binary_p = scipy.sign(X_dense_p)                        # binary - count 1-0 occurrence per documents
         self.occurrence_doc_sum_p = numpy.sum(X_dense_binary_p, axis=0).transpose()     # sum occurrence oer documents
@@ -212,11 +261,11 @@ class CreateVocabularies:
 
         #  Q distribution
         self.count_vec_q = CountVectorizer(
-            ngram_range=self.ngram_range,   # (1, 2),
+            ngram_range=NGRAM_RANGE,
             stop_words='english',
             lowercase=True
         )
-        X_train_counts_q = self.count_vec_q.fit_transform(text_list_list_q)  # count occurrence per word in documents
+        X_train_counts_q = self.count_vec_q.fit_transform(self.text_list_list_q)  # count occurrence per word in documents
         X_dense_q = scipy.sparse.csr_matrix.todense(X_train_counts_q)  # dense transformation
         X_dense_binary_q = scipy.sign(X_dense_q)  # binary - count 1-0 occurrence per documents
         self.occurrence_doc_sum_q = numpy.sum(X_dense_binary_q, axis=0).transpose()  # sum occurrence oer documents
@@ -231,13 +280,11 @@ class CreateVocabularies:
         text_file_q = open(self.description_file_q, "r")
         text_str_q = text_file_q.read().replace('\n', ' ')
 
-        logging.info('P #of words: ' + str(len(text_str_p.split())))
-        logging.info('Q #of words: ' + str(len(text_str_q.split())))
-
-        from sklearn.feature_extraction.text import CountVectorizer
+        Logger.info('P #of words: {}'.format(str(len(text_str_p.split()))))
+        Logger.info('Q #of words: {}'.format(str(len(text_str_q.split()))))
 
         self.vectorizer = CountVectorizer(
-            ngram_range=self.ngram_range,    # (1, 2),
+            ngram_range=NGRAM_RANGE,    # (1, 2),
             stop_words='english',
             lowercase=True
         )
@@ -270,38 +317,37 @@ class CreateVocabularies:
         kl_1 = scipy.stats.entropy(self.normalize_p, self.normalize_q)
         kl_2 = scipy.stats.entropy(self.normalize_q, self.normalize_p)
 
-        logging.info('KL value 1: ' + str(kl_1))
-        logging.info('KL value 2: ' + str(kl_2))
+        Logger.info('KL value 1: {}'.format(str(kl_1)))
+        Logger.info('KL value 2: {}'.format(str(kl_2)))
 
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_documents(self):
 
         # calculate D(p||q)
-        name = 'P_' + str(self.file_name_p) + '_Q_' + str(
-            self.file_name_q)
-        logging.info(name)
+        name = 'P_{}_Q_'.format(str(self.file_name_p), str(self.file_name_q))
+        Logger.info(name)
         try:
             self._calculate_separate_words_documents(self.occurrence_doc_sum_p, self.occurrence_doc_sum_q,
                                                     self.count_vec_p.vocabulary_, self.count_vec_q.vocabulary_,
                                                     self.len_p, self.len_q, name, self.text_list_list_p,
                                                     self.text_list_list_q, self.X_dense_binary_p,
                                                     self.X_dense_binary_q, name, self.file_name_p)
-        except Exception as e:
-            logging.info('Exception occurred')
-            logging.info(e)
+        except Exception, e:
+            Logger.info('Exception occurred: {}'.format(e))
+            Logger.info(traceback.print_exc())
 
         # calculate D(q||p)
-        name = 'P_' + str(self.file_name_q) + '_Q_' + str(self.file_name_p)
-        logging.info(name)
+        name = 'P_{}_Q_{}'.format(str(self.file_name_q), str(self.file_name_p))
+        Logger.info(name)
         try:
             self._calculate_separate_words_documents(self.occurrence_doc_sum_q, self.occurrence_doc_sum_p,
                                                     self.count_vec_q.vocabulary_, self.count_vec_p.vocabulary_,
                                                     self.len_q, self.len_p, name, self.text_list_list_q,
                                                     self.text_list_list_p, self.X_dense_binary_q,
                                                     self.X_dense_binary_p, name, self.file_name_q)
-        except Exception as e:
-            logging.info('Exception occurred')
-            logging.info(e)
+        except Exception, e:
+            Logger.info('Exception occurred: {}'.format(e))
+            Logger.info(traceback.print_exc())
 
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_aggregation(self):
@@ -319,7 +365,7 @@ class CreateVocabularies:
 
         dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q)
 
-        if self.normalize_contribute['flag']:       # normalized cont.
+        if NORMALIZE_CONTRIBUTE_FLAG:       # normalized cont.
             dict_ratio = self._normalized_contribution(dict_ratio)
 
         # save word contribution (KL contribution) for all words
@@ -337,8 +383,8 @@ class CreateVocabularies:
 
         # calculate word contribution
         for word_idx_p, tf_p in enumerate(X_p):
-            if word_idx_p % 1000 == 0:
-                logging.info('calculate words contribution: ' + str(word_idx_p) + ' / ' + str(len(X_p)))
+            if word_idx_p % 10000 == 0:
+                Logger.info('calculate words contribution: {} / {}'.format(str(word_idx_p), str(len(X_p))))
 
             tf_p = np.float(tf_p[0] / len_p)  # p fraction
             word_p = inv_p[word_idx_p]  # p word
@@ -356,13 +402,13 @@ class CreateVocabularies:
     # normalized KL coefficients
     def _normalized_contribution(self, dict_ratio):
 
-        logging.info('normalized word contribution')
+        Logger.info('normalized word contribution')
         mean_contribute = sum(dict_ratio.values()) / len(dict_ratio.values())
         offset = 1.0 / mean_contribute
-        logging.info('offset value: ' + str(round(offset, 3)))
+        Logger.info('offset value: {}'.format(str(round(offset, 3))))
 
         if offset < 0:
-            raise ValueError('normalized factor is below zero: ' + str(offset))
+            raise ValueError('normalized factor is below zero: {}'.format(str(offset)))
 
         for idx, cont in dict_ratio.iteritems():
             dict_ratio[idx] = cont * offset
@@ -389,7 +435,7 @@ class CreateVocabularies:
         sheet1.write(0, 0, 'Word')
         sheet1.write(0, 1, 'contribute')
 
-        logging.info('number of words: ' + str(len(dict_idx_contribute)))
+        Logger.info('number of words: {}'.format(str(len(dict_idx_contribute))))
         row_insert = 0
         for idx, tup in enumerate(dict_idx_contribute):
             cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]   # get word by index
@@ -398,20 +444,31 @@ class CreateVocabularies:
                 sheet1.write(row_insert + 1, 1, str(tup[1]))
                 row_insert += 1
             except Exception, e:
-                logging.info('Failed: ' + str(e))
-                logging.info('Failed: ' + str(idx) + ' ' + str(cur_word.encode('utf8')))
-                pass
+                Logger.info('Failed: {}'.format(str(e)))
+                Logger.info('Failed: {} {}'.format(str(idx), str(cur_word.encode('utf8'))))
+        """
+        dir_name = '{}{}_p_{}_q_{}/'.format(
+            self.dir_all_words_contribute, str(self.cur_time), str(self.len_p), str(self.len_q)
+        )
+        """
 
-        dir_name = self.dir_all_words_contribute + str(self.cur_time) + '_p_' + str(self.len_p) + '_q_' + \
-                   str(self.len_q) + '/'
+        # interesting parameters:
+        # p str(self.len_p)
+        # q str(self.len_q)
+        # num token in file str(row_insert)
+
+        dir_name = '{}/'.format(
+            self.dir_all_words_contribute
+        )
 
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
 
-        excel_file_name = dir_name + str(self.trait) + '_' + str(file_name_p_distribution) + '_num_token_' + \
-                          str(row_insert) + '.xls'
+        excel_file_name = '{}{}_{}.xls'.format(
+            dir_name, str(TRAIT), str(file_name_p_distribution)
+        )
 
-        logging.info('save all words contribute in file: ' + str(excel_file_name))
+        Logger.info('save all words contribute in file: {}'.format(str(excel_file_name)))
         book.save(excel_file_name)
 
     # save top k words relevant  data
@@ -456,7 +513,7 @@ class CreateVocabularies:
                 tf_q = X_q[dict_q[cur_word]][0]
                 q_idx = dict_q[cur_word]
 
-            if self.find_word_description['flag']:
+            if FIND_WORD_DESCRIPTION_FLAG:
                 # find occurrences of current terms and save descriptions in both distribution in excel file
                 self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
                                                     X_dense_binary_p, X_dense_binary_q, excel_name, counter)
@@ -465,9 +522,11 @@ class CreateVocabularies:
 
             frac_p = np.float(tf_p) / len_p
             frac_q = np.float(tf_q) / len_q
-            logging.info(str(cur_word) + ', tf p: ' + str(tf_p) + ', tf q: ' + str(tf_q) + ', cont: ' +
-                         str(round(tup[1], 2)) + ', ratio_tf p: ' + str(round(frac_p, 3)) +
-                         ', ratio_tf q: ' + str(round(frac_q, 3)))
+
+            Logger.info('{}, tf p: {}, tf q: {}, cont: {}, ratio_tf p: {}, ratio_tf q: {}'.format(
+                str(cur_word), str(tf_p), str(tf_q), str(round(tup[1], 2)), str(round(frac_p, 3)), str(round(frac_q, 3))
+            ))
+
             sheet1.write(idx + 1, 0, str(cur_word))
             sheet1.write(idx + 1, 1, str(tf_p))
             sheet1.write(idx + 1, 2, str(tf_q))
@@ -476,14 +535,15 @@ class CreateVocabularies:
             sheet1.write(idx + 1, 5, str(round(frac_q, 3)))
 
         # save top k token with counting
-        excel_file_name = self.dir_top_k_word + 'K_' + str(TOP_K_WORDS) + '_Smooth_' + \
-                          str(SMOOTHING_FACTOR) + '_' + str(self.vocabulary_method) + '_' + str(name) + \
-                          '_top_' + str(TOP_K_WORDS) + '_' + str(self.cur_time) + '.xls'
+        excel_file_name = '{}K_{}_Smooth_{}_{}_{}_top_{}_{}.xls'.format(
+            self.dir_top_k_word, str(TOP_K_WORDS), str(SMOOTHING_FACTOR),
+            str(VOCABULARY_METHOD), str(name), str(TOP_K_WORDS),  str(self.cur_time)
+        )
 
         book.save(excel_file_name)
-        logging.info('save top k tokens in file: ' + str(excel_file_name))
-        logging.info('')
-        logging.info('')
+        Logger.info('save top k tokens in file: ' + str(excel_file_name))
+        Logger.info('')
+        Logger.info('')
 
         pass
 
@@ -527,12 +587,13 @@ class CreateVocabularies:
             frac_p = np.float(tf_p) / sum_of_p
             frac_q = np.float(tf_q) / sum_of_q
             cur_ratio = self.vectorizer.vocabulary_.keys()[self.vectorizer.vocabulary_.values().index(tup[0])]
-            logging.info(str(cur_ratio) + ', tf p: ' + str(tf_p) + ', tf q: ' + str(tf_q) + ', cont: ' +
+
+            Logger.info(str(cur_ratio) + ', tf p: ' + str(tf_p) + ', tf q: ' + str(tf_q) + ', cont: ' +
                          str(round(tup[1], 2)) + ', ratio_tf p: ' + str(round(frac_p, 3)) +
                          ', ratio_tf q: ' + str(round(frac_q, 3)))
 
-        logging.info('')
-        logging.info('')
+        Logger.info('')
+        Logger.info('')
 
     # calculate term with largest ratio and present them
     def cal_ratio_tf_q_p(self, dict_max_ratio):
@@ -544,7 +605,7 @@ class CreateVocabularies:
             tf_p = self.X_dense.tolist()[0][tup[0]]
             tf_q = self.X_dense.tolist()[1][tup[0]]
             cur_ratio = self.vectorizer.vocabulary_.keys()[self.vectorizer.vocabulary_.values().index(tup[0])]
-            logging.info(str(cur_ratio) + ', tf p: ' + str(tf_p) + ', tf q: ' + str(tf_q))
+            Logger.info('{}, tf p: {}, tf q: {}'.format(str(cur_ratio), str(tf_p), str(tf_q)))
 
     def find_occurrences_current_terms(self, cur_word, tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
                                        X_dense_binary_p, X_dense_binary_q, excel_name, counter_top_idx):
@@ -563,7 +624,7 @@ class CreateVocabularies:
         book = xlwt.Workbook(encoding="utf-8")
 
         # P distribution
-        sheet1 = book.add_sheet('P_' + str(tf_p))
+        sheet1 = book.add_sheet('P_{}'.format(str(tf_p)))
         sheet1.write(0, 0, 'Item index')
         sheet1.write(0, 1, 'Item description')
         row_p_i = 0
@@ -584,7 +645,7 @@ class CreateVocabularies:
 
         if q_idx >= 0:
             # Q distribution
-            sheet2 = book.add_sheet('Q_' + str(tf_q))
+            sheet2 = book.add_sheet('Q_{}'.format(str(tf_q)))
             sheet2.write(0, 0, 'Item index')
             sheet2.write(0, 1, 'Item description')
             row_q_i = 0
@@ -604,15 +665,18 @@ class CreateVocabularies:
             # assert cur_word_doc_counter == tf_q
 
         # directory with file to each token
-        cur_dir = self.dir_excel_token_appearance + str(self.vertical) + '_' + str(self.trait) + '_' + str(excel_name) + '_' + str(self.cur_time) + '/'
+        cur_dir = '{}_{}_{}_{}/'.format(
+            self.dir_excel_token_appearance, str(TRAIT), str(excel_name), str(self.cur_time))
+
         if not os.path.exists(cur_dir):
             os.makedirs(cur_dir)
 
-        excel_file_name = cur_dir + str(counter_top_idx) + '_' + str(cur_word) + '_P_' + str(tf_p) + '_Q_' + \
-                          str(tf_q) + '_' + str(self.cur_time) + '.xls'
+        excel_file_name = '{}{}_{}_P_{}_Q_{}_{}.xls'.format(
+            cur_dir, str(counter_top_idx), str(cur_word), str(tf_p), str(tf_q), str(self.cur_time)
+        )
 
         book.save(excel_file_name)
-        logging.info('save descriptions for top-k token in file: ' + str(excel_file_name))
+        Logger.info('save descriptions for top-k token in file: ' + str(excel_file_name))
 
     def save_descriptions_contain_terms(self, cur_word, tf_p, tf_q, p_text_list, q_text_list):
 
@@ -635,16 +699,35 @@ class CreateVocabularies:
         excel_file_name = self.excel_token_dir + 'word_' + str(cur_word) + '_' + str(self.cur_time) + '.xls'
 
         book.save(excel_file_name)
-        logging.info('save kl in file: ' + str(excel_file_name))
+        Logger.info('save kl in file: ' + str(excel_file_name))
 
+    def _plot_histogram(self, a, user_amount, desc_num, additional_str, pt, bin=50):
+        """ generic file to plot histogram and save plot """
 
-def main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, normalize_contribute, find_word_description, ngram_tuple, trait):
+        plt_dir = '../results/pre-processing/calculate_kl/{}/'.format(self.cur_time)
+        if not os.path.exists(plt_dir):
+            os.makedirs(plt_dir)
+
+        plt.style.use('seaborn-deep')
+        plt.hist(a, bins=bin)
+        plt.title('Description per user - {}, {}'.format(additional_str, pt))
+
+        plot_path = '{}{}_user_{}_desc_{}_group_{}.png'.format(
+            plt_dir,
+            pt,                 # personality trait
+            str(user_amount),
+            str(desc_num),
+            additional_str)
+
+        plt.savefig(plot_path)
+        plt.close()
+
+        Logger.info('save histogram plot: {}'.format(str(plot_path)))
+
+def main(merge_df_path):
 
     # init class
-    create_vocabularies_obj = CreateVocabularies(description_file_p, description_file_q, log_dir, results_dir,
-                                                 vocabulary_method, results_dir_title, verbose_flag,
-                                                 normalize_contribute, find_word_description, ngram_tuple, trait)
+    create_vocabularies_obj = CalculateKL(merge_df_path=merge_df_path)
 
     create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
@@ -662,9 +745,8 @@ if __name__ == '__main__':
     # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_876_2018-06-17 09:04:28.txt'
     # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_457_2018-06-17 09:13:38.txt'
     # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_1106_2018-06-17 09:13:38.txt'
-    description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_962_2018-06-17 15:48:07.txt'
-    description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2175_2018-06-17 15:48:07.txt'
-    trait = 'extraversion'
+    # description_file_p = '../results/vocabulary/extraversion/documents_high_extraversion_962_2018-06-17 15:48:07.txt'
+    # description_file_q = '../results/vocabulary/extraversion/documents_low_extraversion_2175_2018-06-17 15:48:07.txt'
 
     # openness
     # description_file_p = '../results/vocabulary/openness/documents_high_openness_2018-06-10 07:28:45.txt'
@@ -688,21 +770,5 @@ if __name__ == '__main__':
     # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_858_2018-06-17 09:19:06.txt'
     # trait = 'neuroticism'
 
-    log_dir = 'log/'
-    results_dir = '../results/kl/'
-    vocabulary_method = 'documents'    # 'documents', 'aggregation'
-    results_dir_title = trait + '_05_gap_'
-    verbose_flag = True
-    normalize_contribute = {        # normalize word contribution extracted KL equation
-        'flag': False,
-        'type': 'ratio'
-    }
-    find_word_description = {       # save top words with k description they appear in
-        'flag': True,
-        'k': 10
-    }
-
-    ngram_tuple = (1, 1)        # (1, 1)
-
-    main(description_file_p, description_file_q, log_dir, results_dir, vocabulary_method, results_dir_title,
-         verbose_flag, normalize_contribute, find_word_description, ngram_tuple, trait)
+    merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
+    main(merge_df_path)

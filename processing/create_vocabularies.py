@@ -10,10 +10,10 @@ import config
 from utils.logger import Logger
 
 GAP_VALUE = config.create_vocabularies['gap_value']
-SPLIT_METHOD = config.create_vocabularies['split_method']
-PERSONALITY_TRAIT = config.create_vocabularies['personality_trait']
-VERTICAL = config.create_vocabularies['vertical']
-VOCABULARY_METHOD = config.create_vocabularies['vocabulary_method']
+# SPLIT_METHOD = config.create_vocabularies['split_method']
+# PERSONALITY_TRAIT = config.create_vocabularies['personality_trait']
+# VERTICAL = config.create_vocabularies['vertical']
+# VOCABULARY_METHOD = config.create_vocabularies['vocabulary_method']
 
 PERSONALITY_TRAIT_LIST = config.personality_trait       # list of the big five PT
 
@@ -475,6 +475,7 @@ if __name__ == '__main__':
     participants_ebay_mapping_file = '../data/participant_data/1425 users input/personality_valid_users.csv'
     participants_purchase_history = '../data/participant_data/1425 users input/Purchase History format item_id.csv'
     """
+    raise EnvironmentError('please run script from run_pre_processing.py')
 
     merge_df_path = '../results/data/POS/5485_2018-08-04 18:03:21.csv'
     main(merge_df_path)

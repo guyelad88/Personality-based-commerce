@@ -5,6 +5,7 @@ from utils_balance_description import BalanceDescription
 from utils_filter_description import FilterDescription
 from utils_pos import UtilsPOS
 from create_vocabularies import CreateVocabularies
+from kl.calculate_kl import CalculateKL
 
 import config
 
@@ -90,6 +91,10 @@ class RunPreProcessing:
         Logger.info('finish pre-processing')
         # NLP methods
 
+        if self.configuration['calculate_KL']:
+            Logger.info('calculate KL between each trait groups')
+            calc_obj = CalculateKL(merge_df_path)
+            calc_obj.run_kl()
 
 def main():
     merge_data_sets = RunPreProcessing()
