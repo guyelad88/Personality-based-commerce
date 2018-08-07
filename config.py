@@ -12,7 +12,7 @@ pre_processing_configs = {
 
     'analyze_PT_groups': True,          # add 'L'/'M'/'H' to each PT
 
-    'calculate_kl': True
+    'calculate_KL': False
 }
 
 # tune duplication validity and user name validity
@@ -28,7 +28,8 @@ filter_description = {
     'DROP_NA': True,
     'DROP_MIN': True,
     'DROP_MAX': True,
-    'DROP_NON_ENGLISH': True
+    'DROP_NON_ENGLISH': True,       # remain only desc in english
+    'DROP_NON_ENGLISH_WORDS': True  # remain only valid words in english
 }
 
 # POS properties

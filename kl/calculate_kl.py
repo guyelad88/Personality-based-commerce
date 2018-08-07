@@ -769,6 +769,7 @@ if __name__ == '__main__':
     # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_705_2018-06-17 09:19:06.txt'
     # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_858_2018-06-17 09:19:06.txt'
     # trait = 'neuroticism'
+    a = 5
 
     merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
     main(merge_df_path)
