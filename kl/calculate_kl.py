@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import csv
@@ -22,7 +23,6 @@ TOP_K_WORDS = config.calculate_kl['TOP_K_WORDS']            # present top words 
 SMOOTHING_FACTOR = config.calculate_kl['SMOOTHING_FACTOR']  # smoothing factor for calculate term contribution (1.0)
 NGRAM_RANGE = config.calculate_kl['NGRAM_RANGE']
 VOCABULARY_METHOD = config.calculate_kl['VOCABULARY_METHOD']  # KL methods: aggregate all documents
-TRAIT = config.calculate_kl['TRAIT']
 
 NORMALIZE_CONTRIBUTE_FLAG = config.calculate_kl['NORMALIZE_CONTRIBUTE']['flag']
 NORMALIZE_CONTRIBUTE_TYPE = config.calculate_kl['NORMALIZE_CONTRIBUTE']['type']         # TODO not in use
@@ -32,7 +32,8 @@ FIND_WORD_DESCRIPTION_K = config.calculate_kl['FIND_WORD_DESCRIPTION']['k']     
 
 PERSONALITY_TRAIT = config.personality_trait        # list of personality traits
 
-RESULT_DIR = '../results/kl/'
+KL_CONFIGURATION_DICT = config.calculate_kl
+RESULT_DIR = '../results/data/kl/'
 
 
 class CalculateKL:
@@ -64,39 +65,29 @@ class CalculateKL:
 
     """
 
-    def __init__(self, merge_df_path, trait='', p_title=None, q_title=None):
+    def __init__(self, merge_df_path):
 
         # arguments
         # self.description_file_p = description_file_p    # description file
         # self.description_file_q = description_file_q    # description file
 
         self.merge_df_path = merge_df_path
-        self.trait = trait
 
-        # TODO remove
-        p_title = 'ppp_tochange'
-        q_title = 'qqq_tochange'
-
-        if p_title is not None:             # mostly contain high/low
-            self.file_name_p = p_title
-        else:
-            self.file_name_p = ntpath.basename(self.description_file_p)[:-4].split('_')[1]
-
-        if q_title is not None:             # mostly contain high/low
-            self.file_name_q = q_title
-        else:
-            self.file_name_q = ntpath.basename(self.description_file_q)[:-4].split('_')[1]
+        self.file_name_p = None
+        self.file_name_q = None
 
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())         # global time to all folders
 
         # token and all the description he appears in
-        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, TRAIT)
+        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, self.cur_time)
 
         # input to Lex-rank algorithm (word + value)
-        self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, TRAIT)
+        self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, self.cur_time)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, TRAIT)
+        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, self.cur_time)
+
+        self.pt = None
 
         self.corpus = list()        # corpus contain two languagas models
         self.vectorizer = list()    # transform words into vectors of numbers using sklearn
@@ -136,9 +127,6 @@ class CalculateKL:
         if VOCABULARY_METHOD not in ['documents', 'aggregation']:
             raise ValueError('vocabulary method: {} is not defined'.format(str(VOCABULARY_METHOD)))
 
-        if TRAIT not in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']:
-            raise ValueError('trait value must be one of the BF personality trait, using to create output directory')
-
         if NGRAM_RANGE[0] > NGRAM_RANGE[1]:
             raise ValueError('n gram is not valid: {}'.format(str(NGRAM_RANGE)))
 
@@ -161,11 +149,13 @@ class CalculateKL:
 
             # iterate over all personality traits and calculate KL
             for pt in PERSONALITY_TRAIT:
-
+                self.pt = pt
                 self._init_class_variables(pt)                  # init all class variables
                 self._load_vocabulary_groups(pt)                # extract two df regards to column value
                 self.load_vocabulary_vector_documents()         # load documents + save attributes to later computation
                 self.calculate_kl_and_language_models_documents()
+
+            self._save_config_values()  # dump configuration
 
         elif VOCABULARY_METHOD == 'aggregation':
             raise ValueError('currently only vocabulary method document is supported')
@@ -224,10 +214,10 @@ class CalculateKL:
             # log statistics and save histogram
             item_amount_per_users = group['buyer_id'].value_counts().tolist()
 
-            user_amount = group['buyer_id'].nunique()
-            desc_num = group.shape[0]
-            self._plot_histogram(
-                np.array(item_amount_per_users), user_amount, desc_num, group_type, pt=pt)
+            user_amount = group['buyer_id'].nunique()       # number of unique users in the group (H/L/M)
+            desc_num = group.shape[0]                       # number of description in the group
+
+            self._plot_histogram(np.array(item_amount_per_users), user_amount, desc_num, group_type, pt=pt)
 
             Logger.info('{}: unique users: {}, num description: {}'.format(
                 group_type,
@@ -235,7 +225,10 @@ class CalculateKL:
                 desc_num))
 
         self.text_list_list_p = dict_personality_values_df['H']['description']
+        self.file_name_p = 'High'
+
         self.text_list_list_q = dict_personality_values_df['L']['description']
+        self.file_name_q = 'Low'
 
     # load vocabulary support aggregation method - KLPost
     def load_vocabulary_vector_documents(self):
@@ -324,7 +317,7 @@ class CalculateKL:
     def calculate_kl_and_language_models_documents(self):
 
         # calculate D(p||q)
-        name = 'P_{}_Q_'.format(str(self.file_name_p), str(self.file_name_q))
+        name = 'P_{}_Q_{}'.format(str(self.file_name_p), str(self.file_name_q))
         Logger.info(name)
         try:
             self._calculate_separate_words_documents(self.occurrence_doc_sum_p, self.occurrence_doc_sum_q,
@@ -335,6 +328,8 @@ class CalculateKL:
         except Exception, e:
             Logger.info('Exception occurred: {}'.format(e))
             Logger.info(traceback.print_exc())
+
+        Logger.info('')
 
         # calculate D(q||p)
         name = 'P_{}_Q_{}'.format(str(self.file_name_q), str(self.file_name_p))
@@ -348,6 +343,7 @@ class CalculateKL:
         except Exception, e:
             Logger.info('Exception occurred: {}'.format(e))
             Logger.info(traceback.print_exc())
+        Logger.info('')
 
     # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_aggregation(self):
@@ -457,15 +453,13 @@ class CalculateKL:
         # q str(self.len_q)
         # num token in file str(row_insert)
 
-        dir_name = '{}/'.format(
-            self.dir_all_words_contribute
-        )
+        dir_name = '{}'.format(self.dir_all_words_contribute)
 
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
 
         excel_file_name = '{}{}_{}.xls'.format(
-            dir_name, str(TRAIT), str(file_name_p_distribution)
+            dir_name, str(self.pt), str(file_name_p_distribution)
         )
 
         Logger.info('save all words contribute in file: {}'.format(str(excel_file_name)))
@@ -666,7 +660,7 @@ class CalculateKL:
 
         # directory with file to each token
         cur_dir = '{}_{}_{}_{}/'.format(
-            self.dir_excel_token_appearance, str(TRAIT), str(excel_name), str(self.cur_time))
+            self.dir_excel_token_appearance, str(self.pt), str(excel_name), str(self.cur_time))
 
         if not os.path.exists(cur_dir):
             os.makedirs(cur_dir)
@@ -724,6 +718,12 @@ class CalculateKL:
 
         Logger.info('save histogram plot: {}'.format(str(plot_path)))
 
+    def _save_config_values(self):
+        """ save configuration into file"""
+        with open('{}config.txt'.format(self.dir_all_words_contribute), 'w') as file:
+            file.write(json.dumps(KL_CONFIGURATION_DICT))
+
+
 def main(merge_df_path):
 
     # init class
@@ -769,7 +769,7 @@ if __name__ == '__main__':
     # description_file_p = '../results/vocabulary/neuroticism/documents_high_neuroticism_705_2018-06-17 09:19:06.txt'
     # description_file_q = '../results/vocabulary/neuroticism/documents_low_neuroticism_858_2018-06-17 09:19:06.txt'
     # trait = 'neuroticism'
-    a = 5
 
-    merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
+    # merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
+    merge_df_path = '../results/data/vocabularies/5457_2018-08-07 13:16:33.csv'
     main(merge_df_path)

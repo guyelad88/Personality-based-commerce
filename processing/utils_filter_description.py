@@ -84,7 +84,7 @@ class FilterDescription:
         for idx, row in description_df.iterrows():
             try:
                 if idx % 1000 == 0:
-                    Logger.info('remove all non-english words: ' + str(idx) + ' / ' + str(description_df.shape[0]))
+                    Logger.info('remove all non-english words: {} / {}'.format(str(idx), str(description_df.shape[0])))
 
                 desc = row['description'].decode("utf8")
 
@@ -124,7 +124,7 @@ class FilterDescription:
         for idx, row in description_df.iterrows():
             try:
                 if idx % 1000 == 0:
-                    Logger.info('parse language desc number: ' + str(idx) + ' / ' + str(description_df.shape[0]))
+                    Logger.info('parse language desc number: {} / {}'.format(str(idx), str(description_df.shape[0])))
 
                 if DROP_MAX or DROP_MIN:
                     desc = row['description'].decode("utf8")
@@ -143,12 +143,10 @@ class FilterDescription:
         plot_path = '{}_histogram_description_length.png'.format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.xlim(0, 1000)
-        plt.hist(description_df['description_length'], bins=100)
+        plt.hist(description_df['description_length'], bins=1000)
         plt.title('description length histogram')
         plt.savefig(plot_path)
         plt.close()
-        raise()
 
         # remove length threshold
         if DROP_MIN:

@@ -12,7 +12,7 @@ pre_processing_configs = {
 
     'analyze_PT_groups': True,          # add 'L'/'M'/'H' to each PT
 
-    'calculate_KL': False
+    'calculate_KL': True
 }
 
 # tune duplication validity and user name validity
@@ -51,9 +51,8 @@ create_vocabularies = {
 calculate_kl = {
     'TOP_K_WORDS': 30,           # present top words
     'SMOOTHING_FACTOR': 1.0,     # smoothing factor for calculate term contribution
-    'NGRAM_RANGE': (2, 2),
+    'NGRAM_RANGE': (1, 1),
     'VOCABULARY_METHOD': 'documents',    # 'documents', 'aggregation'
-    'TRAIT': 'extraversion',
     'NORMALIZE_CONTRIBUTE': {
         'flag': False,
         'type': 'ratio'
