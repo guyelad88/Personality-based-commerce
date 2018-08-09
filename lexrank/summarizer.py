@@ -4,6 +4,8 @@ import numpy as np
 from create_summary import Summarization
 from power_method import stationary_distribution
 
+from utils.logger import Logger
+
 
 # class LexRank build all algorithm objects - (Graph (markov matrix)) and use power method class to
 # find stationary distribution
@@ -23,7 +25,6 @@ class LexRank:
     def __init__(
         self,
         documents,                  # corpus entire data
-        logging,
         lex_rank_algorithm_version,
         summarization_version,
         html_dir=None,
@@ -54,7 +55,6 @@ class LexRank:
         self.keep_urls = keep_urls
         self.include_new_words = include_new_words
         self.vectorizer = None
-        self.logging = logging
         self.html_dir = html_dir
         self.cur_time = cur_time
         self.desc_title = desc_title        # item description title name
@@ -118,8 +118,8 @@ class LexRank:
         if not isinstance(summary_size, int) or summary_size < 1:
             raise ValueError('\'summary_size\' should be a positive integer')
 
-        self.logging.info('')
-        self.logging.info('start get summary method')
+        Logger.info('')
+        Logger.info('start get summary method')
 
         self.threshold = threshold
         self.summary_size = summary_size
@@ -162,8 +162,8 @@ class LexRank:
                 'from the interval [0, 1)',
             )
 
-        self.logging.info('')
-        self.logging.info('Rank sentences in LexRank')
+        Logger.info('')
+        Logger.info('Rank sentences in LexRank')
 
         # original vectorizer (source library) - determine feature of splitting test sentences
         self.analyze = self.vectorizer.build_analyzer()
@@ -190,23 +190,23 @@ class LexRank:
                 threshold=threshold,
             )
         else:
-            self.logging.info('')
-            self.logging.info('discretize bool=False')
-            self.logging.info('build a markov matrix - normalize each row in similarity matrix to one')
+            Logger.info('')
+            Logger.info('discretize bool=False')
+            Logger.info('build a markov matrix - normalize each row in similarity matrix to one')
             markov_matrix = self._markov_matrix(similarity_matrix)
 
         # compute stationary distribution
-        self.logging.info('')
-        self.logging.info('start to compute stationary distribution')
+        Logger.info('')
+        Logger.info('start to compute stationary distribution')
         scores = stationary_distribution(
             markov_matrix,
             increase_power=fast_power_method,
         )
-        self.logging.info('finish to compute stationary distribution using power method')
+        Logger.info('finish to compute stationary distribution using power method')
 
         if normalize:
-            self.logging.info('')
-            self.logging.info('normalize score (stationary distribution)')
+            Logger.info('')
+            Logger.info('normalize score (stationary distribution)')
             scores_len = len(scores)
             scores = [val * scores_len for val in scores]
 
@@ -218,7 +218,6 @@ class LexRank:
 
         # create summarization object
         summary_obj = Summarization(
-            self.logging,
             self.multi_document_summarization,
             self.summarization_similarity_threshold,
             self.summarization_version,
@@ -238,11 +237,11 @@ class LexRank:
     # extract summarization using top-relevant
     def top_relevant_summarization(self):
 
-        self.logging.info('')
-        self.logging.info('summarization version: top-relevant')
-        self.logging.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
+        Logger.info('')
+        Logger.info('summarization version: top-relevant')
+        Logger.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
 
-        self.logging.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
+        Logger.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
 
         description_summary_list = list()
         self.sentence_already_inserted = list()
@@ -262,7 +261,7 @@ class LexRank:
             # max similarity above threshold
             if cur_max_similarity > self.summarization_similarity_threshold:
                 self.discarded_sentences.append(sentence_idx)
-                self.logging.info('Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(round(cur_max_similarity, 2)))
+                Logger.info('Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(round(cur_max_similarity, 2)))
                 continue
 
             # max similarity below threshold
@@ -295,78 +294,78 @@ class LexRank:
     # adjacency_matrix is linear interpolation between similarity matrix and jump matrix
     def calculate_adjacency_matrix(self, tf_scores):
 
-        self.logging.info('')
-        self.logging.info('LexRank algorithm version: ' + str(self.lex_rank_algorithm_version))
+        Logger.info('')
+        Logger.info('LexRank algorithm version: ' + str(self.lex_rank_algorithm_version))
 
         if self.lex_rank_algorithm_version == 'personality-based-LexRank':
 
             # similarity matrix
-            self.logging.info('')
-            self.logging.info('build personality-based similarity matrix:')
+            Logger.info('')
+            Logger.info('build personality-based similarity matrix:')
             self.similarity_matrix_unnormalized = self._calculate_similarity_matrix(tf_scores)
             similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)      # normalize matrix row to 1
-            self.logging.info('')
-            self.logging.info('similarity matrix (normalize to 1)')
-            self.logging.info(similarity_matrix)
+            Logger.info('')
+            Logger.info('similarity matrix (normalize to 1)')
+            Logger.info(similarity_matrix)
             similarity_matrix = self.damping_factor * similarity_matrix     # multiple with damping factor
 
             # jump matrix
-            self.logging.info('')
-            self.logging.info('build jump matrix: damping factor=' + str(self.damping_factor))
+            Logger.info('')
+            Logger.info('build jump matrix: damping factor=' + str(self.damping_factor))
             jump_matrix = self._calculate_personality_based_jump_matrix(tf_scores)            # calculate jump matrix
 
-            self.logging.info('jump matrix (normalize to 1)')
-            self.logging.info(jump_matrix)
+            Logger.info('jump matrix (normalize to 1)')
+            Logger.info(jump_matrix)
 
             jump_matrix = (1-self.damping_factor)*jump_matrix               # multiple with damping factor
 
             # adjacency matrix
-            self.logging.info('')
-            self.logging.info('build adjacency matrix - linear interpolation between similarity matrix and jump matrix')
+            Logger.info('')
+            Logger.info('build adjacency matrix - linear interpolation between similarity matrix and jump matrix')
             adjacency_matrix = similarity_matrix + jump_matrix
 
-            self.logging.info('')
-            self.logging.info('finish building adjacency matrix - ' + str(1-self.damping_factor) +
+            Logger.info('')
+            Logger.info('finish building adjacency matrix - ' + str(1-self.damping_factor) +
                               ' * PM + ' + str(self.damping_factor) + ' * SM')
-            self.logging.info(adjacency_matrix)
+            Logger.info(adjacency_matrix)
 
         elif self.lex_rank_algorithm_version == 'vanilla-LexRank':
 
             # similarity matrix
-            self.logging.info('')
-            self.logging.info('build Vanilla similarity matrix:')
+            Logger.info('')
+            Logger.info('build Vanilla similarity matrix:')
             self.similarity_matrix_unnormalized = self._calculate_similarity_matrix(tf_scores)
             similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)  # normalize matrix row to 1
-            self.logging.info('')
-            self.logging.info('similarity matrix (normalize to 1)')
-            self.logging.info(similarity_matrix)
+            Logger.info('')
+            Logger.info('similarity matrix (normalize to 1)')
+            Logger.info(similarity_matrix)
             similarity_matrix = self.damping_factor * similarity_matrix  # multiple with damping factor
 
             # jump matrix
-            self.logging.info('')
-            self.logging.info('build jump matrix: damping factor=' + str(self.damping_factor))
+            Logger.info('')
+            Logger.info('build jump matrix: damping factor=' + str(self.damping_factor))
             jump_matrix = self._calculate_jump_matrix(tf_scores)  # calculate jump matrix
-            self.logging.info('jump matrix (normalize to 1)')
-            self.logging.info(jump_matrix)
+            Logger.info('jump matrix (normalize to 1)')
+            Logger.info(jump_matrix)
             jump_matrix = (1 - self.damping_factor) * jump_matrix  # multiple with damping factor
 
             # adjacency matrix
-            self.logging.info('')
-            self.logging.info('build adjacency matrix - linear interpolation between similarity matrix and jump matrix')
+            Logger.info('')
+            Logger.info('build adjacency matrix - linear interpolation between similarity matrix and jump matrix')
             adjacency_matrix = similarity_matrix + jump_matrix
 
-            self.logging.info('')
-            self.logging.info('finish building adjacency matrix - ' + str(1 - self.damping_factor) +
+            Logger.info('')
+            Logger.info('finish building adjacency matrix - ' + str(1 - self.damping_factor) +
                               ' * U + ' + str(self.damping_factor) + ' * SM')
-            self.logging.info(adjacency_matrix)
+            Logger.info(adjacency_matrix)
 
         return adjacency_matrix
 
     # calculate personality based jump matrix
     # more probability to sentences contain word correlated to user persoanlity
     def _calculate_personality_based_jump_matrix(self, tf_scores):
-        self.logging.info('')
-        self.logging.info('compute jump matrix (in probability 1-damping factor)')
+        Logger.info('')
+        Logger.info('compute jump matrix (in probability 1-damping factor)')
 
         length = len(tf_scores)
         similarity_matrix = np.zeros([length] * 2)
@@ -386,8 +385,8 @@ class LexRank:
 
     # calculate jump personality with uniform probability
     def _calculate_jump_matrix(self, tf_scores):
-        self.logging.info('')
-        self.logging.info('compute jump matrix (in probability 1-damping factor)')
+        Logger.info('')
+        Logger.info('compute jump matrix (in probability 1-damping factor)')
 
         length = len(tf_scores)
         ones_matrix = np.ones([length] * 2)
@@ -411,7 +410,7 @@ class LexRank:
         else:
             avg_contribute = sum(self.word_cont_dict.values())/len(self.word_cont_dict.values())
 
-        self.logging.info('i: ' + str(i) + ', avg contribute=' + str(round(avg_contribute, 4)))
+        Logger.info('i: ' + str(i) + ', avg contribute=' + str(round(avg_contribute, 4)))
 
         return avg_contribute
 
@@ -421,8 +420,8 @@ class LexRank:
 
     # calculate idf using corpus data & count vectorizer
     def _calculate_idf(self, documents):
-        self.logging.info('')
-        self.logging.info('calculate idf using corpus data with sklearn Count Vectorizer library')
+        Logger.info('')
+        Logger.info('calculate idf using corpus data with sklearn Count Vectorizer library')
         idf_score = dict()
         from sklearn.feature_extraction.text import CountVectorizer
         self.vectorizer = CountVectorizer(binary=True,
@@ -438,7 +437,7 @@ class LexRank:
                 documents = documents[:self.corpus_size]
         unigram_vectorizer = self.vectorizer.fit_transform(documents)
 
-        self.logging.info('Count Vectorizer shape: Num descriptions ' + str(unigram_vectorizer.shape[0]) +
+        Logger.info('Count Vectorizer shape: Num descriptions ' + str(unigram_vectorizer.shape[0]) +
                           ', num words (features): ' + str(unigram_vectorizer.shape[1]))
 
         doc_number_total = unigram_vectorizer.shape[0]
@@ -454,7 +453,7 @@ class LexRank:
             else:
                 idf_score[word] = 0
 
-        self.logging.info('finish calculating idf score')
+        Logger.info('finish calculating idf score')
         return idf_score, dict_word_index
         '''
         vectorizer.vocabulary_.get('document')
@@ -520,9 +519,9 @@ class LexRank:
 
         similarity_matrix = np.zeros([length] * 2)
 
-        self.logging.info('')
-        self.logging.info('compute similarity matrix (in probability 1-damping factor)')
-        self.logging.info('compute similarity between sentences:')
+        Logger.info('')
+        Logger.info('compute similarity matrix (in probability 1-damping factor)')
+        Logger.info('compute similarity between sentences:')
 
         for i in range(length):
             for j in range(i, length):
@@ -537,26 +536,26 @@ class LexRank:
         # self.plot_adjacency_matrix(similarity_matrix, tf_scores)
 
         # statistic about idf in test sentences does not appear in corpus
-        self.logging.info('')
-        self.logging.info('num miss words in idf list: ' + str(self.miss_idf))
-        self.logging.info('num hit words in idf list: ' + str(self.hit_idf))
+        Logger.info('')
+        Logger.info('num miss words in idf list: ' + str(self.miss_idf))
+        Logger.info('num hit words in idf list: ' + str(self.hit_idf))
 
         if float(self.miss_idf)+float(self.hit_idf) > 0:
-            self.logging.info('miss ratio: ' + str(round(float(self.miss_idf) /
+            Logger.info('miss ratio: ' + str(round(float(self.miss_idf) /
                                                          (float(self.miss_idf)+float(self.hit_idf)), 3)))
 
         if self.lex_rank_algorithm_version == 'personality-based-LexRank':
-            self.logging.info('')
-            self.logging.info('num miss words in contribute dict: ' + str(self.miss_word_contribute))
-            self.logging.info('num hit words in contribute dict: ' + str(self.hit_word_contribute))
-            self.logging.info(
+            Logger.info('')
+            Logger.info('num miss words in contribute dict: ' + str(self.miss_word_contribute))
+            Logger.info('num hit words in contribute dict: ' + str(self.hit_word_contribute))
+            Logger.info(
                 'miss ratio: ' + str(round(float(self.miss_word_contribute) /
                                            (float(self.miss_word_contribute) + float(self.hit_word_contribute)), 3)))
-            self.logging.info('count only words appear in both sentences for idf-similarity-cosine')
-            self.logging.info('')
-        self.logging.info('')
-        self.logging.info('similarity matrix unnormalized:')
-        self.logging.info(similarity_matrix)
+            Logger.info('count only words appear in both sentences for idf-similarity-cosine')
+            Logger.info('')
+        Logger.info('')
+        Logger.info('similarity matrix unnormalized:')
+        Logger.info(similarity_matrix)
         return similarity_matrix
 
     # calculate weight between two sentences - for different LexRank algorithms
@@ -603,7 +602,7 @@ class LexRank:
         else:
             similarity = 0
 
-        self.logging.info('i,j: ' + str(i) + ',' + str(j) + ' similarity=' + str(round(similarity, 4)))
+        Logger.info('i,j: ' + str(i) + ',' + str(j) + ' similarity=' + str(round(similarity, 4)))
         return similarity
 
     # compute nominator of idf-modified-cosine
@@ -719,7 +718,7 @@ class LexRank:
             myFile.write('</body>')
             myFile.write('</html>')
             myFile.close()
-            self.logging.info('save html file: ' + str(file_path))
+            Logger.info('save html file: ' + str(file_path))
         return
 
     # build html header (Algorithm main configuration) according to method selected
@@ -856,7 +855,7 @@ class LexRank:
             np.percentile(c_l, 90),
             np.percentile(c_l, 100)
         ]
-        self.logging.info('Percentile contribute list: ' + str(percentile_list))
+        Logger.info('Percentile contribute list: ' + str(percentile_list))
         return percentile_list
 
     # determine background color of word regard to personality contribute value
@@ -906,5 +905,5 @@ class LexRank:
         if not os.path.exists(html_dir_path):
             os.makedirs(html_dir_path)
 
-        self.logging.info('file dir: ' + str(html_dir_path))
+        Logger.info('file dir: ' + str(html_dir_path))
         return html_dir_path

@@ -30,6 +30,8 @@ class BalanceDescription:
         # update logger properties
         Logger.set_handlers('BalanceDescription', log_file_name, level=level)
 
+        cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
         merge_df = pd.read_csv(merge_df_path)  # history purchase
         Logger.info('merged df shape: {}, {}'.format(str(merge_df.shape[0]), str(merge_df.shape[1])))
 
@@ -37,14 +39,14 @@ class BalanceDescription:
         item_amount_per_users = merge_df['buyer_id'].value_counts().tolist()
         a = np.array(item_amount_per_users)
         BalanceDescription._calculate_list_statistic(a)
-        BalanceDescription._plot_histogram(a, len(a), sum(a), '')
+        BalanceDescription._plot_histogram(a, len(a), sum(a), '', cur_time=cur_time)
 
         # build histogram without users with zero description
         Logger.info('')
         Logger.info('remove zeros from list - users without purchase')
         a = list(filter(lambda x: x != 0, a))
         BalanceDescription._calculate_list_statistic(a)
-        BalanceDescription._plot_histogram(a, len(a), sum(a), '_non_zeros')
+        BalanceDescription._plot_histogram(a, len(a), sum(a), '_non_zeros', cur_time=cur_time)
 
         # choose maximum number of description per user
         if max_desc is None:
@@ -74,13 +76,13 @@ class BalanceDescription:
         # show distribution after filtering redundant description
         a = merge_df['buyer_id'].value_counts().tolist()
         BalanceDescription._calculate_list_statistic(np.array(a))
-        BalanceDescription._plot_histogram(a, len(a), sum(a), '_truncated', max_desc)
+        BalanceDescription._plot_histogram(a, len(a), sum(a), '_truncated', cur_time=cur_time, bin=max_desc)
 
         # '../data/descriptions_data/1425 users input/clean_balance_{}_{}.csv'
         dir_path = '../results/data/truncate_description/'
         csv_file_name = '{}_{}.csv'.format(
             str(merge_df.shape[0]),
-            str(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+            str(cur_time)
         )
 
         file_path = BalanceDescription._create_folder_and_save(
@@ -113,10 +115,10 @@ class BalanceDescription:
         Logger.info('0.99: ' + str(round(np.percentile(np_list, 99), 3)))
 
     @staticmethod
-    def _plot_histogram(a, user_amount, desc_num, additional_str, bin=100):
+    def _plot_histogram(a, user_amount, desc_num, additional_str, cur_time, bin=100):
         """ generic file to plot histogram and save plot """
 
-        plt_dir = '../results/pre-processing/balance_description/'
+        plt_dir = '../results/pre-processing/balance_description/{}/'.format(cur_time)
         if not os.path.exists(plt_dir):
             os.makedirs(plt_dir)
 

@@ -1,10 +1,7 @@
 import sys
 import csv
 import logging
-import pandas as pd
-import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
-from calculate_kl import CreateVocabularies
+from processing.calculate_kl import CreateVocabularies
 
 
 # input: two descriptions file represent all texts of specific traits/vertical
@@ -131,10 +128,8 @@ class WrapperCalculateKL:
 
     # load vocabularies regards to vocabulary method
     def run_kl_wrapper_trait(self):
-        import os
 
         counter = 0
-        import pandas as pd
 
         description_file_p = self.description_file_p
         description_file_q = self.description_file_q

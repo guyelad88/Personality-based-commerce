@@ -1,3 +1,4 @@
+from utils.logger import Logger
 
 
 # class Summarization produce summary from personality-based-LexRank results
@@ -7,10 +8,9 @@
 #       summarization_version = 'top_relevant'          # 'top_relevant', 'Bollegata', 'Shahaf'
 class Summarization:
 
-    def __init__(self, logging, multi_document_summarization, summarization_similarity_threshold,
+    def __init__(self, multi_document_summarization, summarization_similarity_threshold,
                  summarization_version, similarity_matrix_unnormalized, sorted_ix, summary_size, sentences):
 
-        self.logging = logging
         self.multi_document_summarization = multi_document_summarization
         self.summarization_similarity_threshold = summarization_similarity_threshold
         self.summarization_version = summarization_version
@@ -48,10 +48,10 @@ class Summarization:
     # single document summarization (summary by sentence order in description with threshold condition)
     def single_document_summarization(self):
 
-        self.logging.info('')
-        self.logging.info('start single document summarization')
-        self.logging.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
-        self.logging.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
+        Logger.info('')
+        Logger.info('start single document summarization')
+        Logger.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
+        Logger.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
 
         # 1. check by importance order (stationary distribution) which sentences are too similar
         # 2. keep only numbers of final sentences
@@ -75,7 +75,7 @@ class Summarization:
             # max similarity above threshold
             if cur_max_similarity > self.summarization_similarity_threshold:
                 self.discarded_sentences.append(sentence_idx)
-                self.logging.info(
+                Logger.info(
                     'Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(
                         round(cur_max_similarity, 2)))
                 continue
@@ -98,11 +98,11 @@ class Summarization:
     # like single summarization expect sort sentences due to their original order
     def top_relevant_summarization(self):
 
-        self.logging.info('')
-        self.logging.info('summarization version: top-relevant')
-        self.logging.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
+        Logger.info('')
+        Logger.info('summarization version: top-relevant')
+        Logger.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
 
-        self.logging.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
+        Logger.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
 
         description_summary_list = list()
         self.sentence_already_inserted = list()
@@ -122,7 +122,7 @@ class Summarization:
             # max similarity above threshold
             if cur_max_similarity > self.summarization_similarity_threshold:
                 self.discarded_sentences.append(sentence_idx)
-                self.logging.info('Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(round(cur_max_similarity, 2)))
+                Logger.info('Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(round(cur_max_similarity, 2)))
                 continue
 
             # max similarity below threshold

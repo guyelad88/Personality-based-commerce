@@ -67,7 +67,7 @@ class CalculateKL:
 
     def __init__(self, merge_df_path, log_file_name, level='info'):
 
-        Logger.set_handlers('AddPersonalityTraitGroups', log_file_name, level=level)
+        Logger.set_handlers('CalculateKL', log_file_name, level=level)
 
         self.merge_df_path = merge_df_path
 
@@ -131,17 +131,6 @@ class CalculateKL:
         if not os.path.exists(RESULT_DIR):
             os.makedirs(RESULT_DIR)
 
-        """
-        if not os.path.exists(self.dir_excel_token_appearance):
-            os.makedirs(self.dir_excel_token_appearance)
-
-        if not os.path.exists(self.dir_all_words_contribute):
-            os.makedirs(self.dir_all_words_contribute)
-
-        if not os.path.exists(self.dir_top_k_word):
-            os.makedirs(self.dir_top_k_word)
-        """
-
     # main function - load vocabularies regards to vocabulary method
     def run_kl(self):
 
@@ -165,13 +154,15 @@ class CalculateKL:
     def _init_class_variables(self, pt):
 
         # token and all the description he appears in
-        self.dir_excel_token_appearance = '{}token/{}/'.format(RESULT_DIR, self.cur_time)
+        self.dir_excel_token_appearance = '{}{}/token/'.format(RESULT_DIR, self.cur_time)
 
         # input to Lex-rank algorithm (word + value)
-        self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, self.cur_time)
+        self.dir_all_words_contribute = '{}{}/all_words_contribute/'.format(RESULT_DIR, self.cur_time)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, self.cur_time)
+        self.dir_top_k_word = '{}{}/top_k/'.format(RESULT_DIR, self.cur_time)
+
+        self.dir_config = '{}{}/'.format(RESULT_DIR, self.cur_time)
 
         self.corpus = list()  # corpus contain two languagas models
         self.vectorizer = list()  # transform words into vectors of numbers using sklearn
@@ -199,6 +190,9 @@ class CalculateKL:
         self.normalize_q = list()  # normalize
         self.normalize_p = list()
 
+        self.df_p = pd.DataFrame
+        self.df_q = pd.DataFrame
+
     def _load_vocabulary_groups(self, pt):
         """
         split data regards to specific personality trait to H and L values
@@ -207,7 +201,7 @@ class CalculateKL:
         """
 
         merge_df = pd.read_csv(self.merge_df_path)
-        merge_df = merge_df.head(500)    # for debugging
+        # merge_df = merge_df.head(500)    # for debugging
 
         dict_personality_values_df = {k: v for k, v in merge_df.groupby('{}_group'.format(pt))}
 
@@ -226,14 +220,15 @@ class CalculateKL:
                 desc_num))
 
         self.text_list_list_p = dict_personality_values_df['H']['description']      # .tolist()
+        self.df_p = dict_personality_values_df['H']
         self.file_name_p = 'High'
 
         self.text_list_list_q = dict_personality_values_df['L']['description']      # .tolist()
+        self.df_q = dict_personality_values_df['L']
         self.file_name_q = 'Low'
 
-    # load vocabulary support aggregation method - KLPost
     def load_vocabulary_vector_documents(self):
-
+        """ load vocabulary support aggregation method - KLPost """
         self.len_p = np.float(len(self.text_list_list_p))
         Logger.info('P #of items descriptions: {}'.format(str(self.len_p)))
 
@@ -266,8 +261,8 @@ class CalculateKL:
         self.occurrence_doc_sum_q = self.occurrence_doc_sum_q.tolist()
         self.X_dense_binary_q = X_dense_binary_q
 
-    # load vocabulary support aggregation method - KLCalc, using sklearn
     def load_vocabulary_vector_aggregation(self):
+        """ load vocabulary support aggregation method - KLCalc, using sklearn """
         text_file_p = open(self.description_file_p, "r")
         text_str_p = text_file_p.read().replace('\n', ' ')
 
@@ -289,9 +284,8 @@ class CalculateKL:
         ]
         self.X = self.vectorizer.fit_transform(self.corpus)
 
-    # calculate KL values
     def calculate_kl(self):
-
+        """ calculate KL values """
         self.X_dense = scipy.sparse.csr_matrix.todense(self.X)
         self.X_dense = self.X_dense.astype(np.float)
         self.X_dense_kl = copy.deepcopy(self.X_dense)
@@ -314,9 +308,8 @@ class CalculateKL:
         Logger.info('KL value 1: {}'.format(str(kl_1)))
         Logger.info('KL value 2: {}'.format(str(kl_2)))
 
-    # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_documents(self):
-
+        """ calculate KL results (both), and most separate values """
         # calculate D(p||q)
         name = 'P_{}_Q_{}'.format(str(self.file_name_p), str(self.file_name_q))
         Logger.info(name)
@@ -346,9 +339,8 @@ class CalculateKL:
             Logger.info(traceback.print_exc())
         Logger.info('')
 
-    # calculate KL results (both), and most separate values
     def calculate_kl_and_language_models_aggregation(self):
-
+        """ calculate KL results (both), and most separate values """
         self.calculate_kl()  # cal kl using sc ipy
 
         # cal most significant separate words - both direction
@@ -356,10 +348,9 @@ class CalculateKL:
 
         self.calculate_separate_words_aggregation(self.X_dense[1].tolist()[0], self.X_dense[0].tolist()[0])
 
-    # calculate most significance term to KL divergence
     def _calculate_separate_words_documents(self, X_p, X_q, dict_p, dict_q, len_p, len_q, name, p_text_list,
                                            q_text_list, X_dense_binary_p, X_dense_binary_q, excel_name, file_name_p):
-
+        """ calculate most significance term to KL divergence """
         dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q)
 
         if NORMALIZE_CONTRIBUTE_FLAG:       # normalized cont.
@@ -372,9 +363,9 @@ class CalculateKL:
         self._save_top_k_word_extend_data(dict_ratio, dict_p, X_p, len_p, dict_q, X_q, len_q, name, p_text_list, q_text_list,
                                           X_dense_binary_p, X_dense_binary_q, excel_name)
 
-    # calculate all words and their contribution
-    def _calculate_word_contribution(self, dict_p, X_p, len_p, dict_q, X_q, len_q):
-
+    @staticmethod
+    def _calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q):
+        """ calculate all words and their contribution """
         dict_ratio = dict()  # contain word index and his KL contribute
         inv_p = {v: k for k, v in dict_p.iteritems()}
 
@@ -383,22 +374,22 @@ class CalculateKL:
             if word_idx_p % 10000 == 0:
                 Logger.info('calculate words contribution: {} / {}'.format(str(word_idx_p), str(len(X_p))))
 
-            tf_p = np.float(tf_p[0] / len_p)  # p fraction
-            word_p = inv_p[word_idx_p]  # p word
+            tf_p = np.float(tf_p[0] / len_p)            # p fraction
+            word_p = inv_p[word_idx_p]                  # p word
 
             if word_p not in dict_q:
                 tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)  # word not in q distribution - using smoothing
             else:
                 tf_q = np.float(X_q[dict_q[word_p]][0] / len_q)  # word appears in q
 
-            contribute = tf_p * np.log(tf_p / tf_q)  # calculate contribution
-            dict_ratio[word_idx_p] = contribute  # store value
+            contribute = tf_p * np.log(tf_p / tf_q)     # calculate contribution
+            dict_ratio[word_idx_p] = contribute         # store value
 
         return dict_ratio
 
-    # normalized KL coefficients
-    def _normalized_contribution(self, dict_ratio):
-
+    @staticmethod
+    def _normalized_contribution(dict_ratio):
+        """ normalized KL coefficients """
         Logger.info('normalized word contribution')
         mean_contribute = sum(dict_ratio.values()) / len(dict_ratio.values())
         offset = 1.0 / mean_contribute
@@ -443,11 +434,6 @@ class CalculateKL:
             except Exception, e:
                 Logger.info('Failed: {}'.format(str(e)))
                 Logger.info('Failed: {} {}'.format(str(idx), str(cur_word.encode('utf8'))))
-        """
-        dir_name = '{}{}_p_{}_q_{}/'.format(
-            self.dir_all_words_contribute, str(self.cur_time), str(self.len_p), str(self.len_q)
-        )
-        """
 
         # interesting parameters:
         # p str(self.len_p)
@@ -513,12 +499,10 @@ class CalculateKL:
                 self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
                                                     X_dense_binary_p, X_dense_binary_q, excel_name, counter)
 
-            # self.save_descriptions_contain_terms(str(cur_word), tf_p, tf_q, p_text_list, q_text_list)
-
             frac_p = np.float(tf_p) / len_p
             frac_q = np.float(tf_q) / len_q
 
-            Logger.info('{}, tf p: {}, tf q: {}, cont: {}, ratio_tf p: {}, ratio_tf q: {}'.format(
+            Logger.debug('{}, tf p: {}, tf q: {}, cont: {}, ratio_tf p: {}, ratio_tf q: {}'.format(
                 str(cur_word), str(tf_p), str(tf_q), str(round(tup[1], 2)), str(round(frac_p, 3)), str(round(frac_q, 3))
             ))
 
@@ -541,15 +525,11 @@ class CalculateKL:
         )
 
         book.save(excel_file_name)
-        Logger.info('save top k tokens in file: ' + str(excel_file_name))
-        Logger.info('')
+        Logger.info('save top k tokens in file: {}'.format(str(excel_file_name)))
         Logger.info('')
 
-        pass
-
-    # calculate most significance term to KL divergence
     def calculate_separate_words_aggregation(self, X_p, X_q):
-
+        """ calculate most significance term to KL divergence """
         self.X_dense_p = X_p    # self.X_dense[0].tolist()[0]
         self.X_dense_q = X_q    # self.X_dense[1].tolist()[0]
 
@@ -588,11 +568,10 @@ class CalculateKL:
             frac_q = np.float(tf_q) / sum_of_q
             cur_ratio = self.vectorizer.vocabulary_.keys()[self.vectorizer.vocabulary_.values().index(tup[0])]
 
-            Logger.info(str(cur_ratio) + ', tf p: ' + str(tf_p) + ', tf q: ' + str(tf_q) + ', cont: ' +
-                         str(round(tup[1], 2)) + ', ratio_tf p: ' + str(round(frac_p, 3)) +
-                         ', ratio_tf q: ' + str(round(frac_q, 3)))
-
-        Logger.info('')
+            Logger.debug('{}, tf p: {}, tf q: {}, cont: {}, ratio_tf p: {}, ratio_tf q: {}'.format(
+                str(cur_ratio), str(tf_p), str(tf_q), str(round(tup[1], 2)),
+                str(round(frac_p, 3)), str(round(frac_q, 3))
+            ))
         Logger.info('')
 
     # calculate term with largest ratio and present them
@@ -605,7 +584,7 @@ class CalculateKL:
             tf_p = self.X_dense.tolist()[0][tup[0]]
             tf_q = self.X_dense.tolist()[1][tup[0]]
             cur_ratio = self.vectorizer.vocabulary_.keys()[self.vectorizer.vocabulary_.values().index(tup[0])]
-            Logger.info('{}, tf p: {}, tf q: {}'.format(str(cur_ratio), str(tf_p), str(tf_q)))
+            Logger.denbug('{}, tf p: {}, tf q: {}'.format(str(cur_ratio), str(tf_p), str(tf_q)))
 
     def find_occurrences_current_terms(self, cur_word, tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
                                        X_dense_binary_p, X_dense_binary_q, excel_name, counter_top_idx):
@@ -627,6 +606,8 @@ class CalculateKL:
         sheet1 = book.add_sheet('P_{}'.format(str(tf_p)), cell_overwrite_ok=True)
         sheet1.write(0, 0, 'Item index')
         sheet1.write(0, 1, 'Item description')
+        sheet1.write(0, 2, 'buyer_id')
+
         row_p_i = 0
         cur_word_doc_counter = 0
         cnt = 0
@@ -640,7 +621,10 @@ class CalculateKL:
                 sheet1.write(cur_word_doc_counter, 0, row_p_i)
 
                 assert str(cur_word) in p_text_list.iloc[row_p_i]
+                assert self.df_p.iloc[row_p_i]['description'] == p_text_list.iloc[row_p_i]
+
                 sheet1.write(cur_word_doc_counter, 1, p_text_list.iloc[row_p_i])
+                sheet1.write(cur_word_doc_counter, 2, str(self.df_p.iloc[row_p_i]['buyer_id']))
             row_p_i += 1
 
         # assert cur_word_doc_counter == tf_p
@@ -650,6 +634,7 @@ class CalculateKL:
             sheet2 = book.add_sheet('Q_{}'.format(str(tf_q)))
             sheet2.write(0, 0, 'Item index')
             sheet2.write(0, 1, 'Item description')
+            sheet2.write(0, 2, 'buyer_id')
             row_q_i = 0
             cnt = 0
             cur_word_doc_counter = 0
@@ -662,7 +647,10 @@ class CalculateKL:
                     sheet2.write(cur_word_doc_counter, 0, row_q_i)
 
                     assert str(cur_word) in q_text_list.iloc[row_q_i]
+                    assert self.df_q.iloc[row_q_i]['description'] == q_text_list.iloc[row_q_i]
+
                     sheet2.write(cur_word_doc_counter, 1, q_text_list.iloc[row_q_i])
+                    sheet2.write(cur_word_doc_counter, 2, str(self.df_q.iloc[row_q_i]['buyer_id']))
                     cnt +=1
                 row_q_i += 1
 
@@ -680,29 +668,7 @@ class CalculateKL:
         )
 
         book.save(excel_file_name)
-        Logger.info('save descriptions for top-k token in file: ' + str(excel_file_name))
-
-    # TODO not in use
-    def save_descriptions_contain_terms(self, cur_word, tf_p, tf_q, p_text_list, q_text_list):
-
-        book = xlwt.Workbook(encoding="utf-8")
-        sheet1 = book.add_sheet('P')
-        counter_p = 0
-        for idx_p, description_p in enumerate(p_text_list):
-            if cur_word in description_p:
-                sheet1.write(counter_p + 1, 1, description_p)       # find top k tokens
-                counter_p += 1
-
-        sheet2 = book.add_sheet('Q')
-        counter_q = 0
-        for idx_q, description_q in enumerate(q_text_list):
-            if cur_word in description_q:
-                sheet2.write(counter_q + 1, 1, description_q)
-                counter_q += 1
-
-        excel_file_name = '{}word_{}_{}.xls'.format(self.excel_token_dir, str(cur_word), self.cur_time)
-        book.save(excel_file_name)
-        Logger.info('save kl in file: ' + str(excel_file_name))
+        Logger.debug('save descriptions for top-k token in file: ' + str(excel_file_name))
 
     def _plot_histogram(self, a, user_amount, desc_num, additional_str, pt, bin=50):
         """ generic file to plot histogram and save plot """
@@ -720,7 +686,8 @@ class CalculateKL:
             pt,                 # personality trait
             str(user_amount),
             str(desc_num),
-            additional_str)
+            additional_str
+        )
 
         plt.savefig(plot_path)
         plt.close()
@@ -729,7 +696,7 @@ class CalculateKL:
 
     def _save_config_values(self):
         """ save configuration into file"""
-        with open('{}config.txt'.format(self.dir_all_words_contribute), 'w') as file:
+        with open('{}config.txt'.format(self.dir_config), 'w') as file:
             file.write(json.dumps(KL_CONFIGURATION_DICT))
 
 

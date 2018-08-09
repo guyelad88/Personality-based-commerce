@@ -1,8 +1,9 @@
-import logging
 import pandas as pd
+from time import gmtime, strftime
 
 from summarizer import LexRank
 from calculate_word_contribute import CalculateWordContribute
+from utils.logger import Logger
 
 
 # Run personality-based LexRank algorithm.
@@ -65,42 +66,19 @@ class WrapperLexRank:
         self.multi_document_summarization = multi_document_summarization  # summarization multi/single method
         self.corpus_size = corpus_size      # corpus size to calculate idf from
 
-        self.verbose_flag = True
-
         an = self
         self.input_attr_dict = vars(an)         # save attribute to show them later
-
-        from time import gmtime, strftime
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
+        self.log_file_name = None
         self.word_cont_dict = dict()    # word and correspond contribute value
         return
 
     # build log object
     def init_debug_log(self):
-        import logging
-
-        log_file_name = self.log_dir + 'LexRank_algorithm_' + str(self.cur_time) + '.log'
-
-        import os
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        # logging.getLogger().addHandler(logging.StreamHandler())
-
-        logging.basicConfig(filename=log_file_name,
-                            format='%(asctime)s, %(levelname)s %(message)s',
-                            datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
-
-        # print result in addition to log file
-        if self.verbose_flag:
-            stderrLogger = logging.StreamHandler()
-            stderrLogger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-            logging.getLogger().addHandler(stderrLogger)
-
-        logging.info("")
-        logging.info("")
+        file_prefix = 'test_lexrank'
+        self.log_file_name = '../log/{}_{}.log'.format(file_prefix, self.cur_time)
+        Logger.set_handlers('TestLexRank', self.log_file_name, level='debug')
 
     # extract corpus documents from a file
     def load_corpus_documents(self, corpus_file):
@@ -127,39 +105,39 @@ class WrapperLexRank:
 
         for c_trait, user_value in self.personality_trait_dict.iteritems():
             if user_value not in ['H', 'L', 'M']:
-                raise('unknown trait value')
+                ValueError('unknown trait value')
 
         if self.damping_factor < 0 or self.damping_factor > 1:
-            raise('damping factor must be a float between 0 to 1')
+            ValueError('damping factor must be a float between 0 to 1')
 
         if self.summarization_similarity_threshold < 0 or self.summarization_similarity_threshold > 1:
-            raise('summarization similarity threshold must be a float between 0 to 1')
+            ValueError('summarization similarity threshold must be a float between 0 to 1')
 
         if 'min' not in self.target_sentences_length or 'max' not in self.target_sentences_length:
-            raise ('target_sentences_length dictionary must contain min and max keys')
+            ValueError('target_sentences_length dictionary must contain min and max keys')
 
         if self.lex_rank_algorithm_version not in ['vanilla-LexRank', 'personality-based-LexRank']:
-            raise ('unknown lex_rank_algorithm_version')
+            ValueError('unknown lex_rank_algorithm_version')
 
         if self.summarization_version not in ['top_relevant', 'Bollegata', 'Shahaf']:
-            raise ('unknown summarization_version')
+            ValueError('unknown summarization_version')
 
         if self.multi_document_summarization not in ['single', 'multi']:
-            raise ('unknown multi_document_summarization value (not single nor multi)')
+            ValueError('unknown multi_document_summarization value (not single nor multi)')
 
         if self.corpus_size != 'max' and not isinstance(self.corpus_size, int):
-            raise('unknown corpus size variable')
+            ValueError('unknown corpus size variable')
 
         return
 
     # log class arguments
     def log_attribute_input(self):
 
-        logging.info('')
-        logging.info('Class arguments')
+        Logger.info('')
+        Logger.info('Class arguments')
         for attr, attr_value in self.input_attr_dict.iteritems():
-            logging.info('Attribute: ' + str(attr) + ', Value: ' + str(attr_value))
-        logging.info('')
+            Logger.info('Attribute: {}, Value: {}'.format(str(attr), str(attr_value)))
+        Logger.info('')
         return
 
     # main function - run LexRank
@@ -175,8 +153,7 @@ class WrapperLexRank:
         word_contibute_obj = CalculateWordContribute(self.trait_word_contribute_folder,
                                                      self.trait_relative_path_dict,
                                                      self.personality_trait_dict,
-                                                     self.cur_time,
-                                                     logging)
+                                                     self.cur_time)
         word_contibute_obj.calculate_user_total_word_contribute()
         word_cont_dict = word_contibute_obj.meta_word_contribute        # personality word contribute
 
@@ -198,7 +175,7 @@ class WrapperLexRank:
             if pd.isnull(desc_1) or pd.isnull(desc_2):
                 continue
 
-            desc_desc = desc_1 + '. ' + desc_2
+            desc_desc = '{}. {}'.format(desc_1, desc_2)
 
             # if desc_id == 'B002C30S96':
             #     a = 5
@@ -226,15 +203,15 @@ class WrapperLexRank:
             else:
                 summary_size = self.summary_size
 
-            logging.info('')
-            logging.info('Description ID: ' + str(desc_id) + ', Length: ' + str(len(desc_desc)) + ', Title: ' +
+            Logger.info('')
+            Logger.info('Description ID: ' + str(desc_id) + ', Length: ' + str(len(desc_desc)) + ', Title: ' +
                          str(desc_title))
-            logging.info('item sentences: ' + str(len(target_sentences)))
+
+            Logger.info('item sentences: {}'.format(str(len(target_sentences))))
 
             # build LexRank class obj, calculate idf on entire corpus
             lxr = LexRank(
                 documents,
-                logging,
                 lex_rank_algorithm_version,
                 summarization_version,
                 html_dir=html_dir,
@@ -294,20 +271,21 @@ class WrapperLexRank:
         '''
         log results of LexRank algorithm
         '''
-        logging.info('')
-        logging.info('summary extracted:')
+        Logger.info('')
+        Logger.info('summary extracted:')
         for sen_idx, sentence in enumerate(summary):
-            logging.info('idx: ' + str(sorted_ix[sen_idx]) + ', score: ' + str(round(lex_scores[sorted_ix[sen_idx]], 3))
-                         + ' - ' + str(sentence))
-        logging.info('')
-        logging.info('sentence order:')
-        logging.info(sorted_ix)
-        logging.info('')
-        logging.info('sentence rank:')
-        logging.info(lex_scores)
-        logging.info('')
-        logging.info('Summary output')
-        logging.info(description_summary_list)
+            Logger.info('idx: {}, score: {} - {}'.format(
+                str(sorted_ix[sen_idx]), str(round(lex_scores[sorted_ix[sen_idx]], 3)), str(sentence)
+            ))
+        Logger.info('')
+        Logger.info('sentence order:')
+        Logger.info(sorted_ix)
+        Logger.info('')
+        Logger.info('sentence rank:')
+        Logger.info(lex_scores)
+        Logger.info('')
+        Logger.info('Summary output')
+        Logger.info(description_summary_list)
 
         return
 

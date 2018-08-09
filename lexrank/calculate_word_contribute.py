@@ -1,21 +1,19 @@
-import logging
 import pandas as pd
 import statistics
 from os import listdir
 from os.path import isfile, join
 
+from utils.logger import Logger
+
 
 class CalculateWordContribute:
-    """
-
-    """
-    def __init__(self, trait_word_contribute_folder, trait_relative_path_dict, personality_trait_dict, time, logging):
+    """  """
+    def __init__(self, trait_word_contribute_folder, trait_relative_path_dict, personality_trait_dict, time):
 
         self.trait_word_contribute_folder = trait_word_contribute_folder    # folder contain all token weights
         self.trait_relative_path_dict = trait_relative_path_dict            # specific dir contain kl
         self.personality_trait_dict = personality_trait_dict                # 'H'/'L' to each personality
         self.cur_time = time
-        self.logging = logging
 
         self.meta_word_contribute = dict()
         self.meta_word_count = dict()               # number of word appearance
@@ -25,10 +23,10 @@ class CalculateWordContribute:
 
     # calculate word contribute to KL using merging all user personality trait value
     def calculate_user_total_word_contribute(self):
-        self.logging.info('')
+        Logger.info('')
         for cur_trait, trait_value in self.personality_trait_dict.iteritems():      # check high/low input
 
-            self.logging.info('Personality trait: ' + str(cur_trait) + ', Type: ' + str(trait_value))
+            Logger.info('Personality trait: ' + str(cur_trait) + ', Type: ' + str(trait_value))
 
             # build file path
 
@@ -49,12 +47,12 @@ class CalculateWordContribute:
 
             # load excel file into df
             cur_trait_df = pd.read_excel(open(cur_file_path, 'rb'), sheet_name=0)
-            self.logging.info('num of words: ' + str(cur_trait_df.shape[0]))
+            Logger.info('num of words: ' + str(cur_trait_df.shape[0]))
 
             # normalize trait to 0-1 scale (min-max version)
             cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].min()) / (cur_trait_df['contribute'].max() - cur_trait_df['contribute'].min())
 
-            self.logging.info('normalize ' + str(cur_trait) + ' trait to 0-1 scale')
+            Logger.info('normalize ' + str(cur_trait) + ' trait to 0-1 scale')
 
             for index, cur_row in cur_trait_df.iterrows():
                 cur_word = cur_row['Word']
@@ -80,16 +78,16 @@ class CalculateWordContribute:
 
         normalize_word_contributr_flag = True
         if normalize_word_contributr_flag:
-            self.logging.info('normalize values after aggregate all trait values together')
+            Logger.info('normalize values after aggregate all trait values together')
             min_value = min(self.meta_word_contribute.values())
             max_value = max(self.meta_word_contribute.values())
             denominator = max_value - min_value
             for cur_word, cur_val in self.meta_word_contribute.iteritems():
                 self.meta_word_contribute[cur_word] = (cur_val-min_value)/denominator
 
-        self.logging.info('')
-        self.logging.info('word mean values: ' + str(round(statistics.mean(self.meta_word_contribute.values()), 3)))
-        self.logging.info('word std values: ' + str(round(statistics.stdev(self.meta_word_contribute.values()), 3)))
+        Logger.info('')
+        Logger.info('word mean values: ' + str(round(statistics.mean(self.meta_word_contribute.values()), 3)))
+        Logger.info('word std values: ' + str(round(statistics.stdev(self.meta_word_contribute.values()), 3)))
 
         self._log_word_contribute()         # save to log (and print in console) top k words
         self._save_word_contribute()        # save word contribution in csv
@@ -102,28 +100,28 @@ class CalculateWordContribute:
         list_word_contribute_sort.reverse()
 
         top_show = 30
-        self.logging.info('')
-        self.logging.info('log top k=' + str(top_show) + ' associated and unrelated words to user personality')
-        self.logging.info('')
-        self.logging.info('word most associated with user personality:')
+        Logger.info('')
+        Logger.info('log top k=' + str(top_show) + ' associated and unrelated words to user personality')
+        Logger.info('')
+        Logger.info('word most associated with user personality:')
         for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
             try:
                 if w_i >= top_show:
                     break
                 line = self.get_line(w_i, word_cont_tuple)
-                self.logging.info(line)
+                Logger.info(line)
             except:
                 print('dkfd')
                 pass
 
         list_word_contribute_sort.reverse()
-        self.logging.info('')
-        self.logging.info('word most unrelated with user personality:')
+        Logger.info('')
+        Logger.info('word most unrelated with user personality:')
         for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
             if w_i >= top_show:
                 break
             line = self.get_line(w_i, word_cont_tuple)
-            self.logging.info(line)
+            Logger.info(line)
 
     # helper function to print row in log
     def get_line(self, w_i, word_cont_tuple):
@@ -135,12 +133,12 @@ class CalculateWordContribute:
     def _save_word_contribute(self, save_all=False):
         """insert all token in ascending order regards to their contribution to user personality"""
 
-        self.logging.info('')
+        Logger.info('')
         if not save_all:
-            self.logging.info('SKIP!!!! - save all word contribution with additional data - flag set to false')
+            Logger.info('SKIP!!!! - save all word contribution with additional data - flag set to false')
             return
 
-        self.logging.info('save all word contribution with additional data')
+        Logger.info('save all word contribution with additional data')
         import operator
         # sort in ascending contribution order
         list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
@@ -160,11 +158,11 @@ class CalculateWordContribute:
                 }, ignore_index=True)
                 cnt += 1
                 if cnt % 1000 == 0:
-                    self.logging.info('add token with informative data: ' + str(cnt) + ' / ' + str(len(list_word_contribute_sort)))
+                    Logger.info('add token with informative data: ' + str(cnt) + ' / ' + str(len(list_word_contribute_sort)))
             except Exception as e:
-                self.logging.info('exception word: ' + str(word_cont_tuple))
-                self.logging.info(e)
-                self.logging.info(e.message)
+                Logger.info('exception word: ' + str(word_cont_tuple))
+                Logger.info(e)
+                Logger.info(e.message)
 
         dir_name = '../results/lexrank/personality_word_contribution/'
 
@@ -183,7 +181,7 @@ class CalculateWordContribute:
         file_path = dir_name + str(self.cur_time) + '.csv'
 
         df.to_csv(file_path, index=False)
-        self.logging.info('save all word contribution: ' + str(file_path))
+        Logger.info('save all word contribution: ' + str(file_path))
 
 
 def main():

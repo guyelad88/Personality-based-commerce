@@ -3,9 +3,10 @@ from time import gmtime, strftime
 from utils.logger import Logger
 from utils_balance_description import BalanceDescription
 from utils_filter_description import FilterDescription
+from remove_duplication import RemoveDuplication
 from utils_pos import UtilsPOS
 from create_vocabularies import CreateVocabularies
-from kl.calculate_kl import CalculateKL
+from calculate_kl import CalculateKL
 
 import config
 
@@ -57,6 +58,13 @@ class RunPreProcessing:
             # merge_df_path = '../data/descriptions_data/1425 users input/merge_20048_time_2018-06-13 11:07:46.csv'
             merge_df_path = FilterDescription.filter_descriptions(
                 merge_df=merge_df_path,
+                log_file_name=self.log_file_name,
+                level='info')
+
+        if self.configuration['remove_row_duplication']:
+            Logger.info('remove entire row duplication')
+            merge_df_path = RemoveDuplication.remove_duplication(
+                merge_df_path=merge_df_path,
                 log_file_name=self.log_file_name,
                 level='info')
 
