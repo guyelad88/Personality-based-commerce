@@ -41,6 +41,7 @@ class MergeDataSet:
         self.init_debug_log()
         self._load_data_sets()
         self._check_valid_input()
+        self._remove_duplications()
         intermediate_df = self._merge_all_df()
         self._save_df(intermediate_df)
 
@@ -64,6 +65,51 @@ class MergeDataSet:
         if not pd.Series(self.user_bfi_score_df['eBay site user name']).is_unique:
             print(set(self.user_bfi_score_df['eBay site user name']) - set(self.user_bfi_score_df['eBay site user name'].unique()))
             raise ValueError('ebay user name must be unique - join will be wrong')
+
+    def _remove_duplications(self):
+        """ remove duplication from each df separately """
+
+        Logger.info('start to remove duplication from all DF separately')
+
+        before_rows = self.description_df.shape[0]
+        self.description_df = self.description_df.drop_duplicates(subset=None, keep='first', inplace=False)
+        after_rows = self.description_df.shape[0]
+        Logger.info('{}: deleted rows: {} - {} = {}'.format(
+            'description df',
+            before_rows,
+            after_rows,
+            before_rows - after_rows
+        ))
+
+        before_rows = self.user_purchase_df.shape[0]
+        self.user_purchase_df = self.user_purchase_df.drop_duplicates(subset=None, keep='first', inplace=False)
+        after_rows = self.user_purchase_df.shape[0]
+        Logger.info('{}: deleted rows: {} - {} = {}'.format(
+            'user_purchase_df',
+            before_rows,
+            after_rows,
+            before_rows - after_rows
+        ))
+
+        before_rows = self.map_user_name_id_df.shape[0]
+        self.map_user_name_id_df = self.map_user_name_id_df.drop_duplicates(subset=None, keep='first', inplace=False)
+        after_rows = self.map_user_name_id_df.shape[0]
+        Logger.info('{}: deleted rows: {} - {} = {}'.format(
+            'map_user_name_id_df',
+            before_rows,
+            after_rows,
+            before_rows - after_rows
+        ))
+
+        before_rows = self.user_bfi_score_df.shape[0]
+        self.user_bfi_score_df = self.user_bfi_score_df.drop_duplicates(subset=None, keep='first', inplace=False)
+        after_rows = self.user_bfi_score_df.shape[0]
+        Logger.info('{}: deleted rows: {} - {} = {}'.format(
+            'user_bfi_score_df',
+            before_rows,
+            after_rows,
+            before_rows - after_rows
+        ))
 
     def _merge_all_df(self):
         """ merge df into one """
