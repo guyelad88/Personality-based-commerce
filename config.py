@@ -1,9 +1,8 @@
 
 # indicate which pre-processing steps needs to do
 pre_processing_configs = {
-    'remove_duplication': True,         # currently under extract_bfi_score
-    'remove_fake_users': True,          # currently under extract_bfi_score
 
+    'pre_process_description': True,    # clean description (e.g. w_1.w_2 w_1w_2)
     'filter_description': True,
     'remove_row_duplication': True,
     'balance_description_per_user': True,
@@ -25,17 +24,37 @@ extract_big_five_inventory_score = {
 # determine how to filter descriptions
 filter_description = {
     'MAX_LENGTH': 1000,
-    'MIN_LENGTH': 15,
+    'MIN_LENGTH': 10,
     'DROP_NA': True,
     'DROP_MIN': True,
     'DROP_MAX': True,
-    'DROP_NON_ENGLISH': True,       # remain only desc in english
-    'DROP_NON_ENGLISH_WORDS': True  # remain only valid words in english
+    'DROP_NON_ENGLISH': True,           # remain only desc in english
+    'DROP_NON_ENGLISH_WORDS': True,     # remain only valid words in english
+    'DROP_DUPLICATION': True,
+    'FLAG_UNINFORMATIVE_WORDS': True,
+    'UNINFORMATIVE_WORDS': ['ship', 'accept', 'positive', 'contact', 'payment', 'address', 'received', 'reply',
+                            'shipping', 'sign', 'addresses', 'purchase', 'fees', 'please', 'bid', 'days', 'bidding',
+                            'cost', 'buyer', 'delivery', 'shipping', 'payment', 'address', 'days', 'included', 'zone',
+                            'response', 'time', 'country', 'arrival', 'returned', 'manufacturer', 'follow', 'shipped',
+                            'express', 'transaction', 'div', 'text', 'die', 'hat', 'sold', 'return', 'shipment', 'via',
+                            'return', 'warranty', 'defect', 'order', 'repair', 'agree', 'ist', 'es', 'sie', 'wir',
+                            'hen', 'sind', 'den', 'ber', 'dye', 'pal', 'nach', 'pal', 'es', 'ber', 'das', 'tie',
+                            'policies', 'package', 'amp', 'http', 'www', 'gif', 'customer', 'feedback', 'seller',
+                            'understanding', 'refund', 'paying', 'receive', 'delay', 'post', 'following',
+                            'information', 'mail', 'telephone'],
+
+    'BI_GRAM_UNINFORMATIVE_WORDS': ['our store', 'thank you', 'we stand', 'solve your problem', 'business day',
+                                    'we shall', 'solve your problem', 'may little different',
+                                    'different on your computer', 'monitor setting', 'computer monitor',
+                                    'welcome to my store', 'mobile phone', 'our price', 'our warehouse',
+                                    'we do not work', 'we will', 'we are'],
+
+    'VERTICAL': None                    # None/Fashion/Electronics e.g
 }
 
 # POS properties
 POS = {
-    'VALID_POS': ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS'],  # save only this POS in addition
+    'VALID_POS': ['JJ', 'JJR', 'JJS'], # ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNP', 'NNPS'],  # save only this POS in addition
     'filter_pos_flag': True,    # save in addition only a specific list of POS
     'save_pos': True            # save POS or words
 }
@@ -50,24 +69,29 @@ create_vocabularies = {
 }
 
 calculate_kl = {
-    'TOP_K_WORDS': 30,           # present top words
+    'TOP_K_WORDS': 50,           # present top words
     'SMOOTHING_FACTOR': 1.0,     # smoothing factor for calculate term contribution
     'NGRAM_RANGE': (1, 1),
     'VOCABULARY_METHOD': 'documents',    # 'documents', 'aggregation'
     'NORMALIZE_CONTRIBUTE': {
         'flag': False,
-        'type': 'ratio'
+        'type': 'min_max',      # ratio'
     },
     'FIND_WORD_DESCRIPTION': {  # save top words with k description they appear in
         'flag': True,
-        'k': 30
+        'k': 200
+    },
+    'KL_TYPE': {
+        'type': 'words',                    # 'words', 'POS'
+        'column_name': 'description'     # 'description_POS_str', 'description', 'description_filter_words_str'
     }
 }
 
 personality_trait = ['agreeableness', 'extraversion', 'openness', 'conscientiousness', 'neuroticism']
 
 balance_description = {
-    'percentile_truncated': 95
+    'percentile_truncated': 95,
+    'max_descriptions': 35  # None
 }
 
 test_lexrank= {

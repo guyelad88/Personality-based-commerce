@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import os
 import nltk
 from time import gmtime, strftime
@@ -40,6 +41,7 @@ class UtilsPOS:
         merge_df['description_POS_filter_str'] = None
         merge_df['description_POS_list'] = None
         merge_df['description_POS_filter_list'] = None
+        merge_df['description_filter_words_str'] = None
 
         for index, row in merge_df.iterrows():
             if index % 1000 == 0:
@@ -51,13 +53,17 @@ class UtilsPOS:
             word_level_tokenizer = nltk.word_tokenize(row_desc)     # return list of words
             tuple_pos = nltk.pos_tag(word_level_tokenizer)          # (word, POS) tuples to all description words.
 
-            pos_desc_str, pos_desc_list, pos_desc_str_filter, pos_desc_list_filter = UtilsPOS._extract_pos(
+            pos_desc_str, pos_desc_list, pos_desc_str_filter, pos_desc_list_filter, word_pos_desc_str = UtilsPOS._extract_pos(
                 tuple_pos)
-
+            # print(word_pos_desc_str)
             merge_df.at[index, 'description_POS_str'] = pos_desc_str
             merge_df.at[index, 'description_POS_filter_str'] = pos_desc_str_filter
             merge_df.at[index, 'description_POS_list'] = pos_desc_list
             merge_df.at[index, 'description_POS_filter_list'] = pos_desc_list_filter
+            merge_df.at[index, 'description_filter_words_str'] = word_pos_desc_str
+
+        merge_df['description_filter_words_str'].replace('', np.nan, inplace=True)
+        merge_df = merge_df[pd.notnull(merge_df['description_filter_words_str'])]
 
         # '../data/descriptions_data/1425 users input/clean_balance_{}_{}.csv'
         dir_path = '../results/data/POS/'
@@ -86,11 +92,17 @@ class UtilsPOS:
         pos_desc_str_filter = ''
         pos_desc_list_filter = list()
 
+        word_pos_desc_str = ''          # return 'word_valid_pos_0 word_valid_pos_1 ...'
+
         for pos_tuple in pos_tuple_list:
 
             pos_desc_str += pos_tuple[tuple_idx]
             pos_desc_str += ' '
             pos_desc_list.append(pos_tuple[tuple_idx])
+
+            if pos_tuple[1] not in VALID_POS:
+                word_pos_desc_str += pos_tuple[0]
+                word_pos_desc_str += ' '
 
             if FILTER_POS_FLAG and pos_tuple[1] not in VALID_POS:       # flag is true and POS isn't in list
                 continue
@@ -99,7 +111,7 @@ class UtilsPOS:
             pos_desc_str_filter += ' '
             pos_desc_list_filter.append(pos_tuple[tuple_idx])
 
-        return pos_desc_str, pos_desc_list, pos_desc_str_filter, pos_desc_list_filter
+        return pos_desc_str, pos_desc_list, pos_desc_str_filter, pos_desc_list_filter, word_pos_desc_str
 
     @staticmethod
     def _create_folder_and_save(df, dir_path, file_name, log_title):

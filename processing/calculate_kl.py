@@ -30,6 +30,9 @@ NORMALIZE_CONTRIBUTE_TYPE = config.calculate_kl['NORMALIZE_CONTRIBUTE']['type'] 
 FIND_WORD_DESCRIPTION_FLAG = config.calculate_kl['FIND_WORD_DESCRIPTION']['flag']
 FIND_WORD_DESCRIPTION_K = config.calculate_kl['FIND_WORD_DESCRIPTION']['k']             # TODO not in use
 
+KL_TYPE = config.calculate_kl['KL_TYPE']['type']                    # KL for pos or words
+KL_TARGET_COLUMN = config.calculate_kl['KL_TYPE']['column_name']    # target column name contains the descriptions
+
 PERSONALITY_TRAIT = config.personality_trait        # list of personality traits
 
 KL_CONFIGURATION_DICT = config.calculate_kl
@@ -55,7 +58,7 @@ class CalculateKL:
         1. ../results/kl//all_words_contribute/cur_trait/____
             excel file with all words contribute between two distribution (e.g. extroversion/introversion)
 
-        2. ../results/kl/top_k_words/cur_trait/____
+        2. ../results/kl/all_words_contribute_detailed/cur_trait/____
             excel file with top k words contribute with additional data between two distribution
 
         3. ../results/kl/token/cur_trait/____
@@ -68,6 +71,8 @@ class CalculateKL:
     def __init__(self, merge_df_path, log_file_name, level='info'):
 
         Logger.set_handlers('CalculateKL', log_file_name, level=level)
+
+        CalculateKL.check_input()
 
         self.merge_df_path = merge_df_path
 
@@ -83,7 +88,7 @@ class CalculateKL:
         self.dir_all_words_contribute = '{}all_words_contribute/{}/'.format(RESULT_DIR, self.cur_time)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = '{}top_k/{}/'.format(RESULT_DIR, self.cur_time)
+        self.dir_kl_detailed_word = '{}kl_detailed/{}/'.format(RESULT_DIR, self.cur_time)
 
         self.pt = None
 
@@ -109,6 +114,8 @@ class CalculateKL:
         self.occurrence_doc_sum_q = list()
         self.len_p = int                        # number of posts
         self.len_q = int                        # number of posts
+        self.unique_buyer_p = int
+        self.unique_buyer_q = int
 
         self.normalize_q = list()   # normalize
         self.normalize_p = list()
@@ -120,13 +127,21 @@ class CalculateKL:
         log_file_name = '../log/{}_{}.log'.format(file_prefix, self.cur_time)
         Logger.set_handlers('CalculateKL', log_file_name, level='debug')
 
-    def check_input(self):
-
+    @staticmethod
+    def check_input():
         if VOCABULARY_METHOD not in ['documents', 'aggregation']:
             raise ValueError('vocabulary method: {} is not defined'.format(str(VOCABULARY_METHOD)))
 
         if NGRAM_RANGE[0] > NGRAM_RANGE[1]:
             raise ValueError('n gram is not valid: {}'.format(str(NGRAM_RANGE)))
+
+        if KL_TYPE not in ['words', 'POS']:
+            raise ValueError('KL type is not defined: {}'.format(str(KL_TYPE)))
+
+        if (KL_TYPE == 'words' and KL_TARGET_COLUMN == 'description_POS_str') or \
+                (KL_TYPE == 'POS' and KL_TARGET_COLUMN != 'description_POS_str'):
+            raise ValueError('KL column name is not match to KL type defined: {} {}'.format
+                             (str(KL_TYPE), str(KL_TARGET_COLUMN)))
 
         if not os.path.exists(RESULT_DIR):
             os.makedirs(RESULT_DIR)
@@ -139,7 +154,7 @@ class CalculateKL:
             # iterate over all personality traits and calculate KL
             for pt in PERSONALITY_TRAIT:
                 self.pt = pt
-                self._init_class_variables(pt)                  # init all class variables
+                self._init_class_variables(pt)                  # init all class variables due to 'for' loop
                 self._load_vocabulary_groups(pt)                # extract two df regards to column value
                 self.load_vocabulary_vector_documents()         # load documents + save attributes to later computation
                 self.calculate_kl_and_language_models_documents()
@@ -147,9 +162,9 @@ class CalculateKL:
             self._save_config_values()  # dump configuration
 
         elif VOCABULARY_METHOD == 'aggregation':
-            raise ValueError('currently only vocabulary method document is supported')
-            self.load_vocabulary_vector_aggregation()
-            self.calculate_kl_and_language_models_aggregation()
+            raise ValueError('currently only vocabulary method documents is supported')
+            # self.load_vocabulary_vector_aggregation()
+            # self.calculate_kl_and_language_models_aggregation()
 
     def _init_class_variables(self, pt):
 
@@ -160,7 +175,7 @@ class CalculateKL:
         self.dir_all_words_contribute = '{}{}/all_words_contribute/'.format(RESULT_DIR, self.cur_time)
 
         # top k words with highest contribute and further explanation
-        self.dir_top_k_word = '{}{}/top_k/'.format(RESULT_DIR, self.cur_time)
+        self.dir_kl_detailed_word = '{}{}/kl_detailed/'.format(RESULT_DIR, self.cur_time)
 
         self.dir_config = '{}{}/'.format(RESULT_DIR, self.cur_time)
 
@@ -186,7 +201,8 @@ class CalculateKL:
         self.occurrence_doc_sum_q = list()
         self.len_p = int  # number of posts
         self.len_q = int  # number of posts
-
+        self.unique_buyer_p = int
+        self.unique_buyer_q = int
         self.normalize_q = list()  # normalize
         self.normalize_p = list()
 
@@ -201,11 +217,12 @@ class CalculateKL:
         """
 
         merge_df = pd.read_csv(self.merge_df_path)
-        # merge_df = merge_df.head(500)    # for debugging
+        # merge_df = merge_df.head(500)                 # for debugging mode
 
         dict_personality_values_df = {k: v for k, v in merge_df.groupby('{}_group'.format(pt))}
 
         for group_type, group in dict_personality_values_df.items():
+
             # log statistics and save histogram
             item_amount_per_users = group['buyer_id'].value_counts().tolist()
 
@@ -219,27 +236,29 @@ class CalculateKL:
                 user_amount,
                 desc_num))
 
-        self.text_list_list_p = dict_personality_values_df['H']['description']      # .tolist()
+        self.text_list_list_p = dict_personality_values_df['H'][KL_TARGET_COLUMN]      # .tolist()
         self.df_p = dict_personality_values_df['H']
         self.file_name_p = 'High'
 
-        self.text_list_list_q = dict_personality_values_df['L']['description']      # .tolist()
+        self.text_list_list_q = dict_personality_values_df['L'][KL_TARGET_COLUMN]      # .tolist()
         self.df_q = dict_personality_values_df['L']
         self.file_name_q = 'Low'
 
     def load_vocabulary_vector_documents(self):
         """ load vocabulary support aggregation method - KLPost """
         self.len_p = np.float(len(self.text_list_list_p))
-        Logger.info('P #of items descriptions: {}'.format(str(self.len_p)))
+        self.unique_buyer_p = np.float(len(self.df_p['buyer_id'].value_counts().index))
+        Logger.info('P #of items descriptions: {}, unique buyers: {}'.format(str(self.len_p), self.unique_buyer_p))
 
         self.len_q = np.float(len(self.text_list_list_q))
-        Logger.info('Q #of items descriptions: {}'.format(str(self.len_q)))
+        self.unique_buyer_q = np.float(len(self.df_q['buyer_id'].value_counts().index))
+        Logger.info('Q #of items descriptions: {}, unique buyers: {}'.format(str(self.len_q), self.unique_buyer_q))
 
         #  P distribution
         self.count_vec_p = CountVectorizer(
             ngram_range=NGRAM_RANGE,
             stop_words='english',
-            lowercase=True
+            lowercase=False
         )
         X_train_counts_p = self.count_vec_p.fit_transform(self.text_list_list_p)   # count occurrence per word in documents
         X_dense_p = scipy.sparse.csr_matrix.todense(X_train_counts_p)   # dense transformation
@@ -252,7 +271,7 @@ class CalculateKL:
         self.count_vec_q = CountVectorizer(
             ngram_range=NGRAM_RANGE,
             stop_words='english',
-            lowercase=True
+            lowercase=False
         )
         X_train_counts_q = self.count_vec_q.fit_transform(self.text_list_list_q)  # count occurrence per word in documents
         X_dense_q = scipy.sparse.csr_matrix.todense(X_train_counts_q)  # dense transformation
@@ -318,12 +337,20 @@ class CalculateKL:
                                                     self.count_vec_p.vocabulary_, self.count_vec_q.vocabulary_,
                                                     self.len_p, self.len_q, name, self.text_list_list_p,
                                                     self.text_list_list_q, self.X_dense_binary_p,
-                                                    self.X_dense_binary_q, name, self.file_name_p)
+                                                    self.X_dense_binary_q, name, self.file_name_p, self.unique_buyer_p,
+                                                    self.unique_buyer_q, self.df_p, self.df_q)
         except Exception, e:
             Logger.info('Exception occurred: {}'.format(e))
             Logger.info(traceback.print_exc())
 
+        # TODO switch between p and q global values
+        """
         Logger.info('')
+        Logger.info('swap class variables')
+        self.text_list_list_p, self.text_list_list_q = self.text_list_list_q, self.text_list_list_p
+        self.df_p, self.df_q = self.df_q, self.df_p
+        Logger.info('')
+        """
 
         # calculate D(q||p)
         name = 'P_{}_Q_{}'.format(str(self.file_name_q), str(self.file_name_p))
@@ -333,7 +360,8 @@ class CalculateKL:
                                                     self.count_vec_q.vocabulary_, self.count_vec_p.vocabulary_,
                                                     self.len_q, self.len_p, name, self.text_list_list_q,
                                                     self.text_list_list_p, self.X_dense_binary_q,
-                                                    self.X_dense_binary_p, name, self.file_name_q)
+                                                    self.X_dense_binary_p, name, self.file_name_q, self.unique_buyer_q,
+                                                    self.unique_buyer_p, self.df_q, self.df_p)
         except Exception, e:
             Logger.info('Exception occurred: {}'.format(e))
             Logger.info(traceback.print_exc())
@@ -349,7 +377,8 @@ class CalculateKL:
         self.calculate_separate_words_aggregation(self.X_dense[1].tolist()[0], self.X_dense[0].tolist()[0])
 
     def _calculate_separate_words_documents(self, X_p, X_q, dict_p, dict_q, len_p, len_q, name, p_text_list,
-                                           q_text_list, X_dense_binary_p, X_dense_binary_q, excel_name, file_name_p):
+                                           q_text_list, X_dense_binary_p, X_dense_binary_q, excel_name, file_name_p,
+                                            unique_buyer_p, unique_buyer_q, df_p, df_q):
         """ calculate most significance term to KL divergence """
         dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q)
 
@@ -361,11 +390,15 @@ class CalculateKL:
 
         # save additional data to top k words + the description they appear in
         self._save_top_k_word_extend_data(dict_ratio, dict_p, X_p, len_p, dict_q, X_q, len_q, name, p_text_list, q_text_list,
-                                          X_dense_binary_p, X_dense_binary_q, excel_name)
+                                          X_dense_binary_p, X_dense_binary_q, excel_name, unique_buyer_p, unique_buyer_q,
+                                          df_p, df_q)
 
     @staticmethod
     def _calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q):
-        """ calculate all words and their contribution """
+        """
+        calculate all words and their contribution
+        :returns: dict of word idx -> word contribution
+        """
         dict_ratio = dict()  # contain word index and his KL contribute
         inv_p = {v: k for k, v in dict_p.iteritems()}
 
@@ -378,9 +411,9 @@ class CalculateKL:
             word_p = inv_p[word_idx_p]                  # p word
 
             if word_p not in dict_q:
-                tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)  # word not in q distribution - using smoothing
+                tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)             # word not in q distribution - using smoothing
             else:
-                tf_q = np.float(X_q[dict_q[word_p]][0] / len_q)  # word appears in q
+                tf_q = np.float(X_q[dict_q[word_p]][0] / len_q)     # word appears in q
 
             contribute = tf_p * np.log(tf_p / tf_q)     # calculate contribution
             dict_ratio[word_idx_p] = contribute         # store value
@@ -391,15 +424,29 @@ class CalculateKL:
     def _normalized_contribution(dict_ratio):
         """ normalized KL coefficients """
         Logger.info('normalized word contribution')
-        mean_contribute = sum(dict_ratio.values()) / len(dict_ratio.values())
-        offset = 1.0 / mean_contribute
-        Logger.info('offset value: {}'.format(str(round(offset, 3))))
 
-        if offset < 0:
-            raise ValueError('normalized factor is below zero: {}'.format(str(offset)))
+        if NORMALIZE_CONTRIBUTE_TYPE == 'min_max':
+            minimum = float(min(dict_ratio.values()))
+            maximum = float(max(dict_ratio.values()))
+            Logger.info('normalized min-max: before range - {} {}'.format(minimum, maximum))
+            for idx, cont in dict_ratio.iteritems():
+                dict_ratio[idx] = (cont - minimum) / float(maximum - minimum)
+            Logger.info('normalized min-max: after range - {} {}'.format(
+                min(dict_ratio.values()), max(dict_ratio.values())))
 
-        for idx, cont in dict_ratio.iteritems():
-            dict_ratio[idx] = cont * offset
+        elif NORMALIZE_CONTRIBUTE_TYPE == 'ratio':
+            mean_contribute = sum(dict_ratio.values()) / len(dict_ratio.values())
+            offset = 1.0 / mean_contribute
+            Logger.info('offset value: {}'.format(str(round(offset, 3))))
+
+            if offset < 0:
+                raise ValueError('normalized factor is below zero: {}'.format(str(offset)))
+
+            for idx, cont in dict_ratio.iteritems():
+                dict_ratio[idx] = cont * offset
+
+        else:
+            raise ValueError('unknown normalized type')
 
         return dict_ratio
 
@@ -415,21 +462,23 @@ class CalculateKL:
 
         dict_idx_contribute = sorted(dict_idx_contribute.items(), key=operator.itemgetter(1))
         dict_idx_contribute.reverse()
+        Logger.info('number of words: {}'.format(str(len(dict_idx_contribute))))
 
         # create excel header
         book = xlwt.Workbook(encoding="utf-8")
-
         sheet1 = book.add_sheet('KL contribute')
         sheet1.write(0, 0, 'Word')
         sheet1.write(0, 1, 'contribute')
+        sheet1.write(0, 2, 'percentile_contribute')
 
-        Logger.info('number of words: {}'.format(str(len(dict_idx_contribute))))
         row_insert = 0
         for idx, tup in enumerate(dict_idx_contribute):
-            cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]   # get word by index
+            cur_word = dict_word_index.keys()[dict_word_index.values().index(tup[0])]       # get word by index
+            percentile = round(1 - float(row_insert) / float(len(dict_idx_contribute)), 4)  # normalized
             try:
                 sheet1.write(row_insert + 1, 0, str(cur_word.encode('utf8')))
-                sheet1.write(row_insert + 1, 1, str(tup[1]))
+                sheet1.write(row_insert + 1, 1, str(round(tup[1], 4)))
+                sheet1.write(row_insert + 1, 2, str(percentile))
                 row_insert += 1
             except Exception, e:
                 Logger.info('Failed: {}'.format(str(e)))
@@ -454,7 +503,7 @@ class CalculateKL:
 
     # save top k words relevant  data
     def _save_top_k_word_extend_data(self, dict_ratio, dict_p, X_p, len_p, dict_q, X_q, len_q, name, p_text_list, q_text_list,
-                                     X_dense_binary_p, X_dense_binary_q, excel_name):
+                                     X_dense_binary_p, X_dense_binary_q, excel_name, unique_buyer_p, unique_buyer_q, df_p, df_q):
         # save all term contribute in a file
         dict_max_ratio = sorted(dict_ratio.items(), key=operator.itemgetter(1))
         dict_max_ratio.reverse()
@@ -464,6 +513,10 @@ class CalculateKL:
 
         # create excel header
         book = xlwt.Workbook(encoding="utf-8")
+
+        xlwt.add_palette_colour("red_flag", 0x21)
+        book.set_colour_RGB(0x21, 250,128,114)
+        style = xlwt.easyxf('pattern: pattern solid, fore_colour red_flag')
         # name = name[:5]
 
         if len(name) > 31:
@@ -477,45 +530,68 @@ class CalculateKL:
         sheet1.write(0, 3, 'Contribute')
         sheet1.write(0, 4, 'Fraction_P')
         sheet1.write(0, 5, 'Fraction_Q')
+        sheet1.write(0, 6, 'Unique buyers P')
+        sheet1.write(0, 7, 'Unique buyers Q')
+        sheet1.write(0, 8, 'Fraction unique buyers P')
+        sheet1.write(0, 9, 'Fraction unique buyers Q')
+        sheet1.write(0, 10, 'Percentile contribution')
 
         for idx, tup in enumerate(dict_max_ratio):
 
             counter += 1
-            if counter > TOP_K_WORDS:
-                break
 
             cur_word = dict_p.keys()[dict_p.values().index(tup[0])]
 
             tf_p = X_p[tup[0]][0]
+
+            # word does not appears in q distribution
             if cur_word not in dict_q:
                 tf_q = 0
                 q_idx = -1
+
+            # word appears in q
             else:
                 tf_q = X_q[dict_q[cur_word]][0]
                 q_idx = dict_q[cur_word]
 
-            if FIND_WORD_DESCRIPTION_FLAG:
-                # find occurrences of current terms and save descriptions in both distribution in excel file
-                self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
-                                                    X_dense_binary_p, X_dense_binary_q, excel_name, counter)
-
             frac_p = np.float(tf_p) / len_p
             frac_q = np.float(tf_q) / len_q
 
-            Logger.debug('{}, tf p: {}, tf q: {}, cont: {}, ratio_tf p: {}, ratio_tf q: {}'.format(
-                str(cur_word), str(tf_p), str(tf_q), str(round(tup[1], 2)), str(round(frac_p, 3)), str(round(frac_q, 3))
-            ))
+            p_token_desc_idx = np.nonzero(X_dense_binary_p[:, tup[0]])[0]
+            assert len(p_token_desc_idx) == tf_p
+            buyer_p = len(df_p.iloc[p_token_desc_idx]['buyer_id'].value_counts().index.tolist())
+            frac_buyer_p = np.float(buyer_p) / unique_buyer_p
 
-            sheet1.write(idx + 1, 0, str(cur_word))
+            if tf_q != 0:
+                q_token_desc_idx = np.nonzero(X_dense_binary_q[:, q_idx])[0]
+                assert len(q_token_desc_idx) == tf_q
+                buyer_q = len(df_q.iloc[q_token_desc_idx]['buyer_id'].value_counts().index.tolist())
+                frac_buyer_q = np.float(buyer_q) / unique_buyer_q
+            else:
+                buyer_q, frac_buyer_q = 0, 0
+
+            percentile = round(1 - float(idx) / float(len(dict_max_ratio)), 4)  # normalized
+
+            sheet1.write(idx + 1, 0, str(cur_word)) if frac_buyer_p > 0.05 else sheet1.write(idx + 1, 0, str(cur_word), style)
             sheet1.write(idx + 1, 1, str(tf_p))
             sheet1.write(idx + 1, 2, str(tf_q))
             sheet1.write(idx + 1, 3, str(round(tup[1], 2)))
             sheet1.write(idx + 1, 4, str(round(frac_p, 3)))
             sheet1.write(idx + 1, 5, str(round(frac_q, 3)))
+            sheet1.write(idx + 1, 6, str(buyer_p))
+            sheet1.write(idx + 1, 7, str(buyer_q))
+            sheet1.write(idx + 1, 8, str(round(frac_buyer_p, 3)))
+            sheet1.write(idx + 1, 9, str(round(frac_buyer_q, 3)))
+            sheet1.write(idx + 1, 10, str(percentile))
+
+            if FIND_WORD_DESCRIPTION_FLAG and counter < TOP_K_WORDS:
+                # find occurrences of current terms and save descriptions in both distribution in excel file
+                self.find_occurrences_current_terms(str(cur_word), tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
+                                                    X_dense_binary_p, X_dense_binary_q, excel_name, counter, df_p, df_q)
 
         # save top k token with counting
 
-        dir_name = '{}'.format(self.dir_top_k_word)
+        dir_name = '{}'.format(self.dir_kl_detailed_word)
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
 
@@ -525,7 +601,7 @@ class CalculateKL:
         )
 
         book.save(excel_file_name)
-        Logger.info('save top k tokens in file: {}'.format(str(excel_file_name)))
+        Logger.info('save kl detailed data in file: {}'.format(str(excel_file_name)))
         Logger.info('')
 
     def calculate_separate_words_aggregation(self, X_p, X_q):
@@ -587,7 +663,7 @@ class CalculateKL:
             Logger.denbug('{}, tf p: {}, tf q: {}'.format(str(cur_ratio), str(tf_p), str(tf_q)))
 
     def find_occurrences_current_terms(self, cur_word, tup, q_idx, tf_p, tf_q, p_text_list, q_text_list,
-                                       X_dense_binary_p, X_dense_binary_q, excel_name, counter_top_idx):
+                                       X_dense_binary_p, X_dense_binary_q, excel_name, counter_top_idx, df_p, df_q):
         """
         high time complexity
         :param cur_word: input term - we seek descriptions contain the terms
@@ -611,20 +687,20 @@ class CalculateKL:
         row_p_i = 0
         cur_word_doc_counter = 0
         cnt = 0
-        for row in X_dense_binary_p:
+        for row in X_dense_binary_p:                # iterate over description (row=desc)
             if cnt > FIND_WORD_DESCRIPTION_K:
                 break
-            cur_row_list = np.array(row)[0].tolist()  # binary list - 1 if word in descriptions
-            if cur_row_list[tup[0]] > 0:        # iterate over all description, extract where '1' on the token
-                cur_word_doc_counter += 1
+            cur_row_list = np.array(row)[0].tolist()    # binary list - 1 if word in descriptions
+            if cur_row_list[tup[0]] > 0:                # iterate over all description, extract where '1' on the token
+                cur_word_doc_counter += 1               # find desc with the token
                 cnt += 1
                 sheet1.write(cur_word_doc_counter, 0, row_p_i)
 
                 assert str(cur_word) in p_text_list.iloc[row_p_i]
-                assert self.df_p.iloc[row_p_i]['description'] == p_text_list.iloc[row_p_i]
+                assert df_p.iloc[row_p_i][KL_TARGET_COLUMN] == p_text_list.iloc[row_p_i]
 
                 sheet1.write(cur_word_doc_counter, 1, p_text_list.iloc[row_p_i])
-                sheet1.write(cur_word_doc_counter, 2, str(self.df_p.iloc[row_p_i]['buyer_id']))
+                sheet1.write(cur_word_doc_counter, 2, str(df_p.iloc[row_p_i]['buyer_id']))
             row_p_i += 1
 
         # assert cur_word_doc_counter == tf_p
@@ -647,11 +723,11 @@ class CalculateKL:
                     sheet2.write(cur_word_doc_counter, 0, row_q_i)
 
                     assert str(cur_word) in q_text_list.iloc[row_q_i]
-                    assert self.df_q.iloc[row_q_i]['description'] == q_text_list.iloc[row_q_i]
+                    assert df_q.iloc[row_q_i][KL_TARGET_COLUMN] == q_text_list.iloc[row_q_i]
 
                     sheet2.write(cur_word_doc_counter, 1, q_text_list.iloc[row_q_i])
-                    sheet2.write(cur_word_doc_counter, 2, str(self.df_q.iloc[row_q_i]['buyer_id']))
-                    cnt +=1
+                    sheet2.write(cur_word_doc_counter, 2, str(df_q.iloc[row_q_i]['buyer_id']))
+                    cnt += 1
                 row_q_i += 1
 
             # assert cur_word_doc_counter == tf_q
@@ -709,7 +785,6 @@ def main(merge_df_path, log_file_name):
         level='info'
     )
 
-    create_vocabularies_obj.init_debug_log()                    # init log file
     create_vocabularies_obj.check_input()                       # check if arguments are valid
     create_vocabularies_obj.run_kl()                            # contain all inner functions
 
@@ -753,5 +828,6 @@ if __name__ == '__main__':
     # merge_df_path = '../results/data/vocabularies/5505_2018-08-04 21:17:50.csv'
     file_prefix = 'run_kl'
     log_file_name = '../log/{}_{}.log'.format(file_prefix, strftime("%Y-%m-%d %H:%M:%S", gmtime()))
-    merge_df_path = '../results/data/vocabularies/5457_2018-08-07 15:06:22.csv'
+    # merge_df_path = '../results/data/vocabularies/5457_2018-08-07 15:06:22.csv'
+    merge_df_path = '../results/data/vocabularies/3954_2018-08-12 07:50:59.csv'
     main(merge_df_path, log_file_name)

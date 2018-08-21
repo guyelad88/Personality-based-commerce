@@ -4,6 +4,7 @@ import re
 import string
 
 import nltk
+import nltk.data
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,6 +20,13 @@ DROP_MIN = config.filter_description['DROP_MIN']
 DROP_MAX = config.filter_description['DROP_MAX']
 DROP_NON_ENGLISH = config.filter_description['DROP_NON_ENGLISH']
 DROP_NON_ENGLISH_WORDS = config.filter_description['DROP_NON_ENGLISH_WORDS']
+DROP_DUPLICATION = config.filter_description['DROP_DUPLICATION']
+
+REMOVE_UNINFORMATIVE_WORDS = config.filter_description['FLAG_UNINFORMATIVE_WORDS']
+UNINFORMATIVE_WORDS_BI_GRAM = config.filter_description['BI_GRAM_UNINFORMATIVE_WORDS']
+UNINFORMATIVE_WORDS = config.filter_description['UNINFORMATIVE_WORDS']
+
+VERTICAL = config.filter_description['VERTICAL']
 
 
 class FilterDescription:
@@ -44,7 +52,7 @@ class FilterDescription:
         """
 
         row_desc = ''.join([i if ord(i) < 128 else ' ' for i in desc])      # remain only ascii chars
-        row_desc = ' '.join(re.split('[.,]', row_desc))                     # split word.word e.g
+        # row_desc = ' '.join(re.split('[.,]', row_desc))                     # split word.word e.g
 
         word_level_tokenizer = nltk.word_tokenize(row_desc)                 # tokenize using NLTK
         return word_level_tokenizer
@@ -66,10 +74,14 @@ class FilterDescription:
         Logger.set_handlers('FilterDescription', log_file_name, level=level)
 
         description_df = pd.read_csv(merge_df)
-        # description_df = description_df.head(20)    # for debugging
+        # description_df = description_df.head(200)    # for debugging
+        # description_df = description_df.loc[description_df['buyer_id'] == 1240181844]
+        # with open('../english_words/words_alpha.txt') as word_file:
+        #     valid_english_words = set(word_file.read().split())
 
-        with open('../english_words/words_alpha.txt') as word_file:
-            valid_english_words = set(word_file.read().split())
+        # tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+        # import nltk
+        valid_english_words = set(nltk.corpus.words.words())
 
         # drop na
         if DROP_NA:
@@ -78,20 +90,36 @@ class FilterDescription:
             description_df = description_df[pd.notnull(description_df['description'])]
             FilterDescription.calc_lost_ratio(before_nan_row, description_df.shape[0], 'drop nan')
 
+        if VERTICAL is not None:
+
+            before = description_df.shape[0]
+            description_df = description_df[description_df['BSNS_VRTCL_NAME'] == VERTICAL]
+            FilterDescription.calc_lost_ratio(before, description_df.shape[0], 'Vertical')
+            description_df = description_df.reset_index()
+
         description_df["en_bool"] = np.nan
         description_df["description_length"] = 0
 
+        # check if is written in english and remain only words in english
+        valid_sentence = 0
+        invalid_sentence = 0
+        length_valid_sentence = list()
+        length_invalid_sentence = list()
+        sentence_per_description = list()
+        words_per_sentence = list()
+
         for idx, row in description_df.iterrows():
             try:
-                if idx % 1000 == 0:
+                if idx % 200 == 0:
                     Logger.info('remove all non-english words: {} / {}'.format(str(idx), str(description_df.shape[0])))
 
                 desc = row['description'].decode("utf8")
 
                 nltk.word_tokenize(''.join([i if ord(i) < 128 else ' ' for i in desc]))
+
                 if DROP_NON_ENGLISH:
 
-                    detect_obj = detect_langs(desc)
+                    detect_obj = detect_langs(desc)         # detect language
                     if detect_obj[0].lang == 'en':
                         description_df.at[idx, 'en_bool'] = 1
                     else:
@@ -105,22 +133,83 @@ class FilterDescription:
                         for word in desc
                         if word.lower() in valid_english_words or word.lower() in string.punctuation or word.isdigit()
                     ]
-                    """desc_non_english = [
+                    """
+                    desc_english = [
                         word.lower()
                         for word in desc
-                        if word.lower() not in valid_english_words and word.lower() not in string.punctuation and not word.isdigit()
-                    ]
-
-                    # Logger.info('{}'.format(desc_non_english))
-                    # Logger.info('{} / {}'.format(len(desc_english), len(desc)))
-                    """
-
+                    ]"""
                     # squash description to contain only words in english
-                    description_df.at[idx, 'description'] = ' '.join(desc_english)
+                    desc = ' '.join(desc_english)
+                    description_df.at[idx, 'description'] = desc
+
+                # remove uninformative sentence (by removing if contain uninformative words)
+                assert REMOVE_UNINFORMATIVE_WORDS is True
+                if REMOVE_UNINFORMATIVE_WORDS:
+                    # TODO: histogram of number of sentences, num deleted sentence, sentence length, deleted per length
+                    # description not ine english will deleted any way
+
+                    # print('english bool: {}'.format(description_df.at[idx, 'en_bool']))
+
+                    if description_df.at[idx, 'en_bool'] == 1:
+                        important_desc = list()
+                        # sentence_list = tokenizer.tokenize(desc)
+                        sentence_list = re.split(r"\.|\?|\;|\!", desc)
+
+                        for s_idx, sentence in enumerate(sentence_list):
+                            # print('before: {}'.format(sentence_list[s_idx]))
+                            sentence_list[s_idx] = ' '.join([w for w in sentence.split() if len(w)>1])
+                            # print('after: {}'.format(sentence_list[s_idx]))
+
+                        # remain only if number of char are bigger than 15 and at least 3 words
+                        sentence_list = [sen for sen in sentence_list if len(sen.split()) > 2 and len(sen) > 5]
+                        sentence_per_description.append(len(sentence_list))
+
+                        for sentence in sentence_list:
+                            # print(sentence)
+                            sen_flag = True
+                            words_per_sentence.append(len(sentence.split()))
+
+                            # sentence language detection and filtering
+                            """detect_obj = detect_langs(sentence)  # detect language
+                            if detect_obj[0].lang != 'en':
+                                print('{}: {}'.format(sentence, detect_obj))
+                                sen_flag = False"""
+
+                            # check heuristic
+                            # reject sentences with uni-gram "bad" words (e.g. ship, fees)
+                            for word in sentence.split():
+                                if word in UNINFORMATIVE_WORDS:
+                                    sen_flag = False
+
+                            # reject sentences with bi-gram "bad" words (e.g. business day, thank you)
+                            if sen_flag:
+                                for uninformative_word in UNINFORMATIVE_WORDS_BI_GRAM:
+                                    if uninformative_word in sentence:
+                                        sen_flag = False
+
+                            if sen_flag:
+                                valid_sentence += 1
+                                # print('valid_sentence')
+                                length_valid_sentence.append(len(sentence.split()))
+                                important_desc.extend([word for word in sentence.split() if len(word) > 1])
+                                important_desc.append('.')      # end of sentence
+                            else:
+                                invalid_sentence += 1
+                                # print('invalid_sentence')
+                                length_invalid_sentence.append(len(sentence.split()))
+
+                        # squash description to contain only words in english
+                        desc = ' '.join(important_desc)
+                        # print(desc)
+                        description_df.at[idx, 'description'] = desc
 
             except BaseException as e:
                 print('exception found: {}'.format(str(e)))
 
+        FilterDescription._statistic_over_informative_sentences(valid_sentence, invalid_sentence,
+                                                                sentence_per_description, words_per_sentence,
+                                                                length_valid_sentence, length_invalid_sentence)
+        # calculate description length (only english words)
         for idx, row in description_df.iterrows():
             try:
                 if idx % 1000 == 0:
@@ -143,7 +232,7 @@ class FilterDescription:
         plot_path = '{}_histogram_description_length.png'.format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.hist(description_df['description_length'], bins=1000)
+        plt.hist(np.array(description_df['description_length']), bins=100)
         plt.title('description length histogram')
         plt.savefig(plot_path)
         plt.close()
@@ -165,7 +254,13 @@ class FilterDescription:
             description_df = description_df[description_df['en_bool'] > 0]      # remain english only
             FilterDescription.calc_lost_ratio(before, description_df.shape[0], 'non english descriptions')
 
-        # description_df = description_df[['item_id', 'description']]
+        if DROP_DUPLICATION:
+            before = description_df.shape[0]
+            description_df = description_df.drop_duplicates(
+                subset=['description', 'buyer_id'],
+                keep='first',
+                inplace=False)
+            FilterDescription.calc_lost_ratio(before, description_df.shape[0], 'duplication on buyer_id and description')
 
         dir_path = '../results/data/filter_description/'
 
@@ -203,6 +298,52 @@ class FilterDescription:
             str(after_size),
             str(1 - round(ratio, 3)),
             str(reason)))
+
+    @staticmethod
+    def _statistic_over_informative_sentences(valid_sentence, invalid_sentence, sentence_per_description,
+                                              words_per_sentence, length_valid_sentence, length_invalid_sentence):
+
+        # remove sentence that contain details about payments etc..
+        Logger.info('Valid sentences: {} Invalid sentence: {}'.format(valid_sentence, invalid_sentence))
+        Logger.info('Valid sentences ratio: {}'.format(
+            round(float(valid_sentence)/float(valid_sentence + invalid_sentence), 3)))
+
+        plot_dir = '../results/pre-processing/filter_description/'
+        cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        plot_path = '{}_sentence_per_description.png'.format(cur_time)
+        plot_path = '{}{}'.format(plot_dir, plot_path)
+        plt.style.use('seaborn-deep')
+        plt.hist(np.array(sentence_per_description), bins=10)
+        plt.title('sentence per description histogram')
+        plt.savefig(plot_path)
+        plt.close()
+
+        plot_path = '{}_words_per_sentence.png'.format(cur_time)
+        plot_path = '{}{}'.format(plot_dir, plot_path)
+        plt.style.use('seaborn-deep')
+        plt.xlim(0, 600)
+        plt.hist(np.array(words_per_sentence), bins=50)
+        plt.title('words_per_sentence histogram')
+        plt.savefig(plot_path)
+        plt.close()
+
+        plot_path = '{}_length_valid_sentence.png'.format(cur_time)
+        plot_path = '{}{}'.format(plot_dir, plot_path)
+        plt.style.use('seaborn-deep')
+        plt.xlim(0, 600)
+        plt.hist(np.array(length_valid_sentence), bins=50)
+        plt.title('length_valid_sentence histogram')
+        plt.savefig(plot_path)
+        plt.close()
+
+        plot_path = '{}_length_invalid_sentence.png'.format(cur_time)
+        plot_path = '{}{}'.format(plot_dir, plot_path)
+        plt.style.use('seaborn-deep')
+        plt.xlim(0, 600)
+        plt.hist(np.array(length_invalid_sentence), bins=50)
+        plt.title('length_invalid_sentence histogram')
+        plt.savefig(plot_path)
+        plt.close()
 
 
 def main(description_file, output_dir):

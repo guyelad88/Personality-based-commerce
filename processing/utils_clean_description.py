@@ -112,6 +112,7 @@ class CleanDescription:
 
         # change new line \n to . (easy to recognize later)
         line = ". ".join(line.split("\n"))
+        Logger.info('Replace HTML end of line with dot')
 
         # split by camelCase
         for fragment in line.strip().split(' '):
@@ -122,6 +123,8 @@ class CleanDescription:
                     continue
                 words.append(token)
         output = " ".join(words)
+
+        Logger.info('Split words in camelCase format')
 
         # split words concatenate with .:+ e.g.
         words = list()
@@ -134,5 +137,6 @@ class CleanDescription:
                 words.append(token)
         output = " ".join(words)
 
-        return output
+        Logger.info('Split words concatenate with . , e.g.')
 
+        return output

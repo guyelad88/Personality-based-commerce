@@ -7,7 +7,8 @@ import config
 from time import gmtime, strftime
 from utils.logger import Logger
 
-PERCENTILE_MAX_TRUNCATED = config.balance_description['percentile_truncated']            # present top words (30)
+PERCENTILE_MAX_TRUNCATED = config.balance_description['percentile_truncated']       # present top words (30)
+MAX_DESCRIPTION = config.balance_description['max_descriptions']                    #
 
 
 class BalanceDescription:
@@ -20,7 +21,7 @@ class BalanceDescription:
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
     @staticmethod
-    def truncate_description_per_user_merged(merge_df_path, log_file_name, level='info', max_desc=None):
+    def truncate_description_per_user_merged(merge_df_path, log_file_name, level='info'):
         """
         limit the number of descriptions per user in the data-set.
         1.
@@ -49,6 +50,7 @@ class BalanceDescription:
         BalanceDescription._plot_histogram(a, len(a), sum(a), '_non_zeros', cur_time=cur_time)
 
         # choose maximum number of description per user
+        max_desc = MAX_DESCRIPTION
         if max_desc is None:
             max_desc = int(round(np.percentile(a, PERCENTILE_MAX_TRUNCATED)))
         Logger.info('maximum number of description per user: {}'.format(str(max_desc)))
