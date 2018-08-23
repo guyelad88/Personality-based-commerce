@@ -46,7 +46,8 @@ class RunPreProcessing:
 
         Logger.info('start pre-process global method')
 
-        """if self.configuration['pre_process_description']:
+        """
+        if self.configuration['pre_process_description']:
 
             Logger.info('Pre process descriptions')
             merge_df_path = CleanDescription._clean_description(
@@ -101,9 +102,10 @@ class RunPreProcessing:
 
         Logger.info('final DF save to a file: {}'.format(merge_df_path))
         Logger.info('finish pre-processing')
-        # NLP methods
 
-        # merge_df_path = '../results/data/vocabularies/4561_2018-08-15 12:24:12.csv'
+        # NLP methods
+        # merge_df_path = '../results/data/vocabularies/4195_2018-08-21 19:49:42.csv'
+
         if self.configuration['calculate_KL']:
             Logger.info('calculate KL between each trait groups')
             calc_obj = CalculateKL(

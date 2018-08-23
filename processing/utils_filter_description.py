@@ -81,6 +81,10 @@ class FilterDescription:
 
         # tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
         # import nltk
+        from nltk.corpus import words
+        from nltk.corpus import wordnet
+        # manywords = words.words() + wordnet.words()
+        # valid_english_words = set(manywords)
         valid_english_words = set(nltk.corpus.words.words())
 
         # drop na
@@ -132,7 +136,14 @@ class FilterDescription:
                         word.lower()
                         for word in desc
                         if word.lower() in valid_english_words or word.lower() in string.punctuation or word.isdigit()
+                           or word[-1:] == 's' or word[-2:] in ['ed', 'er'] or word[-3:] == ['ing', 'day', 'est', 'ear', 'ite'] or word[-4:] == 'able'
                     ]
+
+                    """if detect_obj[0].lang == 'en':
+                        for word in desc:
+                            if word.lower() not in valid_english_words and word.lower() not in string.punctuation and word[-1:] != 's' and word[-2:] != ['ed', 'er'] and word[-3:] not in ['ing', 'day', 'est', 'ear', 'ite']:
+                                print(word)"""
+
                     """
                     desc_english = [
                         word.lower()

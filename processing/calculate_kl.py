@@ -24,8 +24,11 @@ SMOOTHING_FACTOR = config.calculate_kl['SMOOTHING_FACTOR']  # smoothing factor f
 NGRAM_RANGE = config.calculate_kl['NGRAM_RANGE']
 VOCABULARY_METHOD = config.calculate_kl['VOCABULARY_METHOD']  # KL methods: aggregate all documents
 
+CONTRIBUTE_TYPE = config.calculate_kl['CONTRIBUTE_TYPE']
 NORMALIZE_CONTRIBUTE_FLAG = config.calculate_kl['NORMALIZE_CONTRIBUTE']['flag']
 NORMALIZE_CONTRIBUTE_TYPE = config.calculate_kl['NORMALIZE_CONTRIBUTE']['type']         # TODO not in use
+
+CLIP_DESCRIPTION = config.calculate_kl['CLIP_DESCRIPTION']
 
 FIND_WORD_DESCRIPTION_FLAG = config.calculate_kl['FIND_WORD_DESCRIPTION']['flag']
 FIND_WORD_DESCRIPTION_K = config.calculate_kl['FIND_WORD_DESCRIPTION']['k']             # TODO not in use
@@ -137,6 +140,9 @@ class CalculateKL:
 
         if KL_TYPE not in ['words', 'POS']:
             raise ValueError('KL type is not defined: {}'.format(str(KL_TYPE)))
+
+        if CONTRIBUTE_TYPE not in ['description_fraction', 'buyers_fraction']:
+            raise ValueError('Contribute calculation is not defined: {}'.format(str(CONTRIBUTE_TYPE)))
 
         if (KL_TYPE == 'words' and KL_TARGET_COLUMN == 'description_POS_str') or \
                 (KL_TYPE == 'POS' and KL_TARGET_COLUMN != 'description_POS_str'):
@@ -380,7 +386,19 @@ class CalculateKL:
                                            q_text_list, X_dense_binary_p, X_dense_binary_q, excel_name, file_name_p,
                                             unique_buyer_p, unique_buyer_q, df_p, df_q):
         """ calculate most significance term to KL divergence """
-        dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q)
+
+        if CONTRIBUTE_TYPE == 'description_fraction':
+            dict_ratio = self._calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q,
+                                                           unique_buyer_p, unique_buyer_q, df_p, df_q,
+                                                           X_dense_binary_p, X_dense_binary_q)
+
+        elif CONTRIBUTE_TYPE == 'buyers_fraction':
+            dict_ratio = self._calculate_word_contribution_buyers_fraction(
+                dict_p, X_p, len_p, dict_q, X_q, len_q, unique_buyer_p, unique_buyer_q, df_p, df_q,
+                X_dense_binary_p, X_dense_binary_q
+            )
+        else:
+            raise ValueError('unknown contribute calculation type: {}'.format(CONTRIBUTE_TYPE))
 
         if NORMALIZE_CONTRIBUTE_FLAG:       # normalized cont.
             dict_ratio = self._normalized_contribution(dict_ratio)
@@ -394,11 +412,14 @@ class CalculateKL:
                                           df_p, df_q)
 
     @staticmethod
-    def _calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q):
+    def _calculate_word_contribution_old(dict_p, X_p, len_p, dict_q, X_q, len_q):
         """
         calculate all words and their contribution
         :returns: dict of word idx -> word contribution
         """
+
+        Logger.info('calculate word contribution using fraction of description contains the token')
+
         dict_ratio = dict()  # contain word index and his KL contribute
         inv_p = {v: k for k, v in dict_p.iteritems()}
 
@@ -417,6 +438,103 @@ class CalculateKL:
 
             contribute = tf_p * np.log(tf_p / tf_q)     # calculate contribution
             dict_ratio[word_idx_p] = contribute         # store value
+
+        return dict_ratio
+
+    @staticmethod
+    def _calculate_word_contribution(dict_p, X_p, len_p, dict_q, X_q, len_q, unique_buyer_p, unique_buyer_q, df_p, df_q,
+                                    X_dense_binary_p, X_dense_binary_q):
+        """
+        calculate all words and their contribution
+        :returns: dict of word idx -> word contribution
+        """
+
+        Logger.info('calculate word contribution using fraction of description contains the token')
+        Logger.info('clip number of description contains the token per buyer: {}'.format(CLIP_DESCRIPTION))
+
+        dict_ratio = dict()  # contain word index and his KL contribute
+        inv_p = {v: k for k, v in dict_p.iteritems()}
+
+        # calculate word contribution
+        for word_idx_p, tf_p in enumerate(X_p):
+            if word_idx_p % 10000 == 0:
+                Logger.info('calculate words contribution: {} / {}'.format(str(word_idx_p), str(len(X_p))))
+
+            tf_p = np.float(tf_p[0] / len_p)  # p fraction
+            word_p = inv_p[word_idx_p]  # p word
+
+            # extract indexes of description contain the token
+            p_token_desc_idx = np.nonzero(X_dense_binary_p[:, word_idx_p])[0]
+            assert len(p_token_desc_idx) == X_p[word_idx_p][0]
+
+            # truncate max desc per buyer
+            buyer_p = df_p.iloc[p_token_desc_idx]['buyer_id'].value_counts().clip(upper=CLIP_DESCRIPTION)
+
+            # frac of descriptions
+            tf_p = np.float(sum(buyer_p.values)) / np.float(len_p)
+
+            if word_p not in dict_q:
+                tf_q = 1.0 / (len_q * SMOOTHING_FACTOR)  # word not in q distribution - using smoothing
+            else:
+                # tf_q = np.float(X_q[dict_q[word_p]][0] / len_q)  # word appears in q
+
+                q_idx = dict_q[word_p]
+                tf_q = X_q[dict_q[word_p]][0]
+                q_token_desc_idx = np.nonzero(X_dense_binary_q[:, q_idx])[0]
+                assert len(q_token_desc_idx) == tf_q
+
+                buyer_q = df_q.iloc[q_token_desc_idx]['buyer_id'].value_counts().clip(upper=CLIP_DESCRIPTION)
+                tf_q = np.float(sum(buyer_q.values)) / np.float(len_q)
+
+            contribute = tf_p * np.log(tf_p / tf_q)  # calculate contribution
+            dict_ratio[word_idx_p] = contribute  # store value
+
+        return dict_ratio
+
+    @staticmethod
+    def _calculate_word_contribution_buyers_fraction(dict_p, X_p, len_p, dict_q, X_q, len_q,
+                                                     unique_buyer_p, unique_buyer_q, df_p, df_q,
+                                                     X_dense_binary_p, X_dense_binary_q):
+        """
+        calculate all words and their contribution using buyers fraction
+        :returns: dict of word idx -> word contribution
+        """
+
+        Logger.info('calculate word contribution using fraction of buyers with description contains the token')
+
+        dict_ratio = dict()  # contain word index and his KL contribute
+        inv_p = {v: k for k, v in dict_p.iteritems()}
+
+        # calculate word contribution
+        for word_idx_p, tf_p in enumerate(X_p):
+            if word_idx_p % 10000 == 0:
+                Logger.info('calculate words contribution: {} / {}'.format(str(word_idx_p), str(len(X_p))))
+
+            tf_p = tf_p[0]              # p word descriptions
+            word_p = inv_p[word_idx_p]  # p word
+
+            # extract indexes of description contain the token
+            p_token_desc_idx = np.nonzero(X_dense_binary_p[:, word_idx_p])[0]
+            assert len(p_token_desc_idx) == tf_p
+            # get number of unique buyers
+            buyer_p = len(df_p.iloc[p_token_desc_idx]['buyer_id'].value_counts().index.tolist())
+            # calculate fraction of buyers
+            tf_p = np.float(buyer_p) / unique_buyer_p
+
+            if word_p not in dict_q:
+                tf_q = 1.0 / (unique_buyer_q * SMOOTHING_FACTOR)  # word not in q distribution - using smoothing
+
+            # calculate number of unique buyers
+            else:
+                q_idx = dict_q[word_p]
+                tf_q = X_q[dict_q[word_p]][0]
+                q_token_desc_idx = np.nonzero(X_dense_binary_q[:, q_idx])[0]
+                assert len(q_token_desc_idx) == tf_q
+                buyer_q = len(df_q.iloc[q_token_desc_idx]['buyer_id'].value_counts().index.tolist())
+                tf_q = np.float(buyer_q) / unique_buyer_q
+
+            contribute = tf_p * np.log(tf_p / tf_q)  # calculate contribution
+            dict_ratio[word_idx_p] = contribute  # store value
 
         return dict_ratio
 
@@ -557,9 +675,14 @@ class CalculateKL:
             frac_p = np.float(tf_p) / len_p
             frac_q = np.float(tf_q) / len_q
 
+            # extract indexes of description contain the token
             p_token_desc_idx = np.nonzero(X_dense_binary_p[:, tup[0]])[0]
             assert len(p_token_desc_idx) == tf_p
+
+            # get number of unique buyers
             buyer_p = len(df_p.iloc[p_token_desc_idx]['buyer_id'].value_counts().index.tolist())
+
+            # calculate fraction of buyers
             frac_buyer_p = np.float(buyer_p) / unique_buyer_p
 
             if tf_q != 0:
