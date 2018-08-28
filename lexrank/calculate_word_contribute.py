@@ -1,16 +1,16 @@
+import os
+import nltk
 import pandas as pd
 import statistics
 from os import listdir
 from os.path import isfile, join
-
 from utils.logger import Logger
 
 
 class CalculateWordContribute:
     """  """
-    def __init__(self, trait_word_contribute_folder, trait_relative_path_dict, personality_trait_dict, time):
+    def __init__(self, trait_relative_path_dict, personality_trait_dict, time):
 
-        self.trait_word_contribute_folder = trait_word_contribute_folder    # folder contain all token weights
         self.trait_relative_path_dict = trait_relative_path_dict            # specific dir contain kl
         self.personality_trait_dict = personality_trait_dict                # 'H'/'L' to each personality
         self.cur_time = time
@@ -30,18 +30,20 @@ class CalculateWordContribute:
 
             # build file path
 
-            cur_file_path = self.trait_word_contribute_folder + self.trait_relative_path_dict[cur_trait]
+            cur_file_path = self.trait_relative_path_dict
 
-            trait_file_suffix = [f for f in listdir(cur_file_path) if isfile(join(cur_file_path, f))]
+            trait_file_suffix = [
+                f for f in listdir(cur_file_path) if isfile(join(cur_file_path, f)) and cur_trait in f
+            ]
 
             if trait_value == 'H':
-                file_name = [s for s in trait_file_suffix if 'high' in s]
+                file_name = [s for s in trait_file_suffix if 'High' in s]
                 assert len(file_name) == 1
-                cur_file_path += file_name[0]
+                cur_file_path = os.path.join(cur_file_path, file_name[0])
             elif trait_value == 'L':
-                file_name = [s for s in trait_file_suffix if 'low' in s]
+                file_name = [s for s in trait_file_suffix if 'Low' in s]
                 assert len(file_name) == 1
-                cur_file_path += file_name[0]
+                cur_file_path = os.path.join(cur_file_path, file_name[0])
             else:
                 raise ValueError('currently we do not support M values, only H/L ')
 
@@ -50,13 +52,12 @@ class CalculateWordContribute:
             Logger.info('num of words: ' + str(cur_trait_df.shape[0]))
 
             # normalize trait to 0-1 scale (min-max version)
-            cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].min()) / (cur_trait_df['contribute'].max() - cur_trait_df['contribute'].min())
-
-            Logger.info('normalize ' + str(cur_trait) + ' trait to 0-1 scale')
+            # cur_trait_df['contribute'] = (cur_trait_df['contribute'] - cur_trait_df['contribute'].min()) / (cur_trait_df['contribute'].max() - cur_trait_df['contribute'].min())
+            # Logger.info('normalize ' + str(cur_trait) + ' trait to 0-1 scale')
 
             for index, cur_row in cur_trait_df.iterrows():
                 cur_word = cur_row['Word']
-                cur_cont = cur_row['contribute']
+                cur_cont = cur_row['percentile_contribute']
 
                 # check word is a string
                 if not isinstance(cur_word, basestring):
@@ -90,7 +91,7 @@ class CalculateWordContribute:
         Logger.info('word std values: ' + str(round(statistics.stdev(self.meta_word_contribute.values()), 3)))
 
         self._log_word_contribute()         # save to log (and print in console) top k words
-        self._save_word_contribute()        # save word contribution in csv
+        self._save_word_contribute(save_all=False)        # save word contribution in csv
         return
 
     # log top k most associated and unrelated words to user personality
@@ -130,7 +131,7 @@ class CalculateWordContribute:
                 str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
         return line
 
-    def _save_word_contribute(self, save_all=False):
+    def _save_word_contribute(self, save_all=True):
         """insert all token in ascending order regards to their contribution to user personality"""
 
         Logger.info('')
@@ -140,22 +141,27 @@ class CalculateWordContribute:
 
         Logger.info('save all word contribution with additional data')
         import operator
+        lemma = nltk.wordnet.WordNetLemmatizer()
         # sort in ascending contribution order
         list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
         list_word_contribute_sort.reverse()
 
-        df = pd.DataFrame(columns=[['word', 'contribution', 'num_trait', 'trait_values']])
-
+        df = pd.DataFrame(columns=['word', 'contribution', 'num_trait', 'trait_values'])
         cnt = 0
         # insert token one-by-one
         for w_i, word_cont_tuple in enumerate(list_word_contribute_sort):
             try:
-                df = df.append({
+
+                lem_word = lemma.lemmatize(word_cont_tuple[0])
+
+                data = pd.DataFrame({
                     'word': word_cont_tuple[0],
+                    'lemmatize_word': lem_word,
                     'contribution': word_cont_tuple[1],
                     'num_trait': self.meta_word_count[word_cont_tuple[0]],
                     'trait_values': str(self.meta_word_values_diff_trait[word_cont_tuple[0]])
-                }, ignore_index=True)
+                }, index=[0])
+                df = df.append(data, ignore_index=True)
                 cnt += 1
                 if cnt % 1000 == 0:
                     Logger.info('add token with informative data: ' + str(cnt) + ' / ' + str(len(list_word_contribute_sort)))

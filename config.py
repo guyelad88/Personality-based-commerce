@@ -32,6 +32,7 @@ filter_description = {
     'DROP_NON_ENGLISH_WORDS': True,     # remain only valid words in english
     'DROP_DUPLICATION': True,
     'FLAG_UNINFORMATIVE_WORDS': True,
+
     'UNINFORMATIVE_WORDS': ['ship', 'accept', 'positive', 'contact', 'payment', 'address', 'received', 'reply',
                             'shipping', 'sign', 'addresses', 'purchase', 'fees', 'please', 'bid', 'days', 'bidding',
                             'cost', 'buyer', 'delivery', 'shipping', 'payment', 'address', 'days', 'included', 'zone',
@@ -41,20 +42,22 @@ filter_description = {
                             'hen', 'sind', 'den', 'ber', 'dye', 'pal', 'nach', 'pal', 'es', 'ber', 'das', 'tie',
                             'policies', 'package', 'amp', 'http', 'www', 'gif', 'customer', 'feedback', 'seller',
                             'understanding', 'refund', 'paying', 'receive', 'delay', 'post', 'following',
-                            'information', 'mail', 'telephone'],
+                            'information', 'mail', 'telephone', 'de', 'en', 'la', 'thanks', 'sellers'],
 
     'BI_GRAM_UNINFORMATIVE_WORDS': ['our store', 'thank you', 'we stand', 'solve your problem', 'business day',
                                     'we shall', 'solve your problem', 'may little different',
                                     'different on your computer', 'monitor setting', 'computer monitor',
                                     'welcome to my store', 'mobile phone', 'our price', 'our warehouse',
-                                    'we do not work', 'we will', 'we are'],
+                                    'we do not work', 'we will', 'we are', 'terms of sale', 'we understand',
+                                    'place your orders', 'we can assure', 'these discounts', 'item purchases',
+                                    '30 days', 'money back'],
 
-    'VERTICAL': None                    # None/Fashion/Electronics e.g
+    'VERTICAL': 'Fashion'   # None                    # None/Fashion/Electronics e.g
 }
 
 # POS properties
 POS = {
-    'VALID_POS': ['JJ', 'JJR', 'JJS'], # ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNP', 'NNPS'],  # save only this POS in addition
+    'VALID_POS': ['JJ', 'JJR', 'JJS'],  # ['RBS', 'RB', 'RBR', 'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNP', 'NNPS'],
     'filter_pos_flag': True,    # save in addition only a specific list of POS
     'save_pos': True            # save POS or words
 }
@@ -64,7 +67,6 @@ create_vocabularies = {
     'gap_value': 0.4,  # must be a float number between zero to one
     # 'vocabulary_method': 'documents',       # 'documents', 'aggregation'
     # 'split_method': 'traits',               # 'vertical', 'traits', 'traits_vertical'
-    # 'personality_trait': 'extraversion',  # 'agreeableness' 'extraversion' 'openness' 'conscientiousness' 'neuroticism'
     # 'vertical': '',                         # 'Fashion'
 }
 
@@ -73,6 +75,8 @@ calculate_kl = {
     'SMOOTHING_FACTOR': 1.0,     # smoothing factor for calculate term contribution
     'NGRAM_RANGE': (1, 1),
     'VOCABULARY_METHOD': 'documents',    # 'documents', 'aggregation'
+    'CONTRIBUTE_TYPE': 'description_fraction',      # 'buyers_fraction'
+    'CLIP_DESCRIPTION': 5,  # max desc contain token per user
     'NORMALIZE_CONTRIBUTE': {
         'flag': False,
         'type': 'min_max',      # ratio'
@@ -94,31 +98,33 @@ balance_description = {
     'max_descriptions': 35  # None
 }
 
-test_lexrank= {
-    'summary_size': 10,             # summarization length - 'max' or int
+test_lexrank = {
+    'summary_size': 'max', # 1=             # summarization length - 'max' or int
     'threshold': 0.03,             # min edge weight between two sentences
-    'damping_factor': 0.8,        # probability not to jump
+    'damping_factor': 0.5,        # probability not to jump
     'summarization_similarity_threshold': 0.4,
     'target_sentences_length': {
         'min': 0,
         'max': 100
     },
-    'corpus_size': 100,  # 'max'          # TODO be careful using this value - limit idf computation time
+    'corpus_size': 1000,  # 'max'     # TODO be careful using this value - limit idf computation time
+
     # please don't change (damping factor:1 same effect)
     'personality_word_flag': True,
     'random_walk_flag': True,                        # flag if combine random jump between sentences
 
-    'multi_document_summarization': 'single',             # summarization method for single/multi documents
+    'multi_document_summarization': 'single',                       # summarization method for single/multi documents
     'lex_rank_algorithm_version': 'personality-based-LexRank',      # 'vanilla-LexRank', 'personality-based-LexRank'
-    'summarization_version': 'top_relevant',              # 'top_relevant', 'Bollegata', 'Shahaf'
+    'summarization_version': 'top_relevant',                        # 'top_relevant', 'Bollegata', 'Shahaf'
 
-    # current user personality - 'H'\'L'\'M' (high\low\miss(or mean))
+    # current user personality - 'H'\'L'\'M' (high\low\miss(or mean)
+    # TODO change it isn't the description we need to use
+    'corpus_path_file': '../data/descriptions_data/1425 users input/merge_20048.csv',  # calculate idf from
+    'target_item_description_file': '../data/amazon_description/size=435_min_size=10_time=2018-08-23 12:41:02.csv',  # amazon_949
+    'trait_relative_path_dict': '../results/data/kl/uni-gram regular 2018-08-21 21:04:59/all_words_contribute',
     'personality_trait_dict': {
-        'openness': 'L',
-        'conscientiousness': 'L',
-        'extraversion': 'L',
-        'agreeableness': 'L',
-        'neuroticism': 'L'
+        'openness': 'H',
+        'extraversion': 'H',
     }
 }
 

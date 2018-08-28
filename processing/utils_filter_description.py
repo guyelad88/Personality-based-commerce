@@ -135,9 +135,19 @@ class FilterDescription:
                     desc_english = [
                         word.lower()
                         for word in desc
-                        if word.lower() in valid_english_words or word.lower() in string.punctuation or word.isdigit()
-                           or word[-1:] == 's' or word[-2:] in ['ed', 'er'] or word[-3:] == ['ing', 'day', 'est', 'ear', 'ite'] or word[-4:] == 'able'
+                        if word.lower() in valid_english_words
+                           or word.lower() in string.punctuation
+                           # or word.isdigit()
+                           or word[-1:] == 's'
+                           or word[-2:] in ['ed', 'er']
+                           or word[-3:] == ['ing', 'day', 'est', 'ear', 'ite']
+                           or word[-4:] == 'able'
                     ]
+
+                    """desc_english = [
+                        word.lower()
+                        for word in desc
+                    ]"""
 
                     """if detect_obj[0].lang == 'en':
                         for word in desc:
@@ -168,7 +178,7 @@ class FilterDescription:
 
                         for s_idx, sentence in enumerate(sentence_list):
                             # print('before: {}'.format(sentence_list[s_idx]))
-                            sentence_list[s_idx] = ' '.join([w for w in sentence.split() if len(w)>1])
+                            sentence_list[s_idx] = ' '.join([w for w in sentence.split() if len(w) > 1])
                             # print('after: {}'.format(sentence_list[s_idx]))
 
                         # remain only if number of char are bigger than 15 and at least 3 words
@@ -243,7 +253,8 @@ class FilterDescription:
         plot_path = '{}_histogram_description_length.png'.format(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.hist(np.array(description_df['description_length']), bins=100)
+        plt.xlim(0, 1200)
+        plt.hist(np.array(description_df['description_length']), bins=400)
         plt.title('description length histogram')
         plt.savefig(plot_path)
         plt.close()
@@ -324,7 +335,8 @@ class FilterDescription:
         plot_path = '{}_sentence_per_description.png'.format(cur_time)
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.hist(np.array(sentence_per_description), bins=10)
+        plt.xlim(0, max(sentence_per_description))
+        plt.hist(np.array(sentence_per_description), bins=20)
         plt.title('sentence per description histogram')
         plt.savefig(plot_path)
         plt.close()
@@ -332,7 +344,7 @@ class FilterDescription:
         plot_path = '{}_words_per_sentence.png'.format(cur_time)
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.xlim(0, 600)
+        plt.xlim(0, max(words_per_sentence))
         plt.hist(np.array(words_per_sentence), bins=50)
         plt.title('words_per_sentence histogram')
         plt.savefig(plot_path)
@@ -341,7 +353,7 @@ class FilterDescription:
         plot_path = '{}_length_valid_sentence.png'.format(cur_time)
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.xlim(0, 600)
+        plt.xlim(0, max(length_valid_sentence))
         plt.hist(np.array(length_valid_sentence), bins=50)
         plt.title('length_valid_sentence histogram')
         plt.savefig(plot_path)
@@ -350,7 +362,7 @@ class FilterDescription:
         plot_path = '{}_length_invalid_sentence.png'.format(cur_time)
         plot_path = '{}{}'.format(plot_dir, plot_path)
         plt.style.use('seaborn-deep')
-        plt.xlim(0, 600)
+        plt.xlim(0, max(length_invalid_sentence))
         plt.hist(np.array(length_invalid_sentence), bins=50)
         plt.title('length_invalid_sentence histogram')
         plt.savefig(plot_path)

@@ -303,7 +303,7 @@ class LexRank:
             Logger.info('')
             Logger.info('build personality-based similarity matrix:')
             self.similarity_matrix_unnormalized = self._calculate_similarity_matrix(tf_scores)
-            similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)      # normalize matrix row to 1
+            similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)   # normalize matrix row to 1
             Logger.info('')
             Logger.info('similarity matrix (normalize to 1)')
             Logger.info(similarity_matrix)
@@ -327,7 +327,7 @@ class LexRank:
             Logger.info('')
             Logger.info('finish building adjacency matrix - ' + str(1-self.damping_factor) +
                               ' * PM + ' + str(self.damping_factor) + ' * SM')
-            Logger.info(adjacency_matrix)
+            Logger.debug(adjacency_matrix)
 
         elif self.lex_rank_algorithm_version == 'vanilla-LexRank':
 
@@ -345,8 +345,8 @@ class LexRank:
             Logger.info('')
             Logger.info('build jump matrix: damping factor=' + str(self.damping_factor))
             jump_matrix = self._calculate_jump_matrix(tf_scores)  # calculate jump matrix
-            Logger.info('jump matrix (normalize to 1)')
-            Logger.info(jump_matrix)
+            Logger.debug('jump matrix (normalize to 1)')
+            Logger.debug(jump_matrix)
             jump_matrix = (1 - self.damping_factor) * jump_matrix  # multiple with damping factor
 
             # adjacency matrix
@@ -410,7 +410,7 @@ class LexRank:
         else:
             avg_contribute = sum(self.word_cont_dict.values())/len(self.word_cont_dict.values())
 
-        Logger.info('i: ' + str(i) + ', avg contribute=' + str(round(avg_contribute, 4)))
+        Logger.debug('i: ' + str(i) + ', avg contribute=' + str(round(avg_contribute, 4)))
 
         return avg_contribute
 
@@ -455,40 +455,6 @@ class LexRank:
 
         Logger.info('finish calculating idf score')
         return idf_score, dict_word_index
-        '''
-        vectorizer.vocabulary_.get('document')
-        X_2[:, feature_index]
-        bags_of_words = []
-
-        for doc in documents:
-            doc_words = set()
-
-            for sentence in doc:
-                words = self.tokenize_sentence(sentence)
-                doc_words.update(words)
-
-            if doc_words:
-                bags_of_words.append(doc_words)
-
-        if not bags_of_words:
-            raise ValueError('documents are not informative')
-
-        doc_number_total = len(bags_of_words)
-
-        if self.include_new_words:
-            default_value = math.log(doc_number_total + 1)
-
-        else:
-            default_value = 0
-
-        idf_score = defaultdict(lambda: default_value)
-
-        for word in set.union(*bags_of_words):
-            doc_number_word = sum(1 for bag in bags_of_words if word in bag)
-            idf_score[word] = math.log(doc_number_total / doc_number_word)
-
-        return idf_score
-        '''
 
     # calculate tf of words in test sentences (number of appearances)
     def _calculate_tf(self, tokenized_sentence):
@@ -731,9 +697,12 @@ class LexRank:
         # header according to LexRank version
         if self.lex_rank_algorithm_version == 'personality-based-LexRank':
             myFile.write('<p><b>User Personality traits: </b>')
-            for trait, group in self.user_personality_dict.iteritems():
-                myFile.write('<span style="background-color: ' + str('#ffffff') + ';">' +
-                             str(trait) + ': ' + str(group) + ', ' + '</span>')
+
+            user_personality_text = ', '.join(
+                '{}: {}'.format(trait, group) for trait, group in self.user_personality_dict.iteritems()
+            )
+
+            myFile.write('<span style="background-color: ' + str('#ffffff') + ';">' + user_personality_text + '</span>')
             myFile.write('</p>')
             myFile.write('<p><b>Damping factor: </b>' + str(self.damping_factor) + ' <b>, Edge threshold: </b>' +
                          str(self.threshold) + '</p>')
@@ -753,8 +722,6 @@ class LexRank:
         if self.summarization_version == 'top_relevant':    # 'Bollegata', 'Shahaf'
             myFile.write('<p><b>Summarization_similarity_threshold: </b>' +
                          str(self.summarization_similarity_threshold) + '</p>')
-
-        return
 
     # write meta data about sentences - according to their LexRank score
     def write_sentence_header(self, myFile):
@@ -802,7 +769,6 @@ class LexRank:
                                  str(' ') + str(cur_word) + str(' ') +
                                  '</span>')
             myFile.write('</p>')
-        return
 
     # write summarization according to summarization version
     def write_summarization_output(self, myFile):
@@ -814,7 +780,6 @@ class LexRank:
 
         # write sentences which discarded due to high similarity
         self.write_sentences_discarded_participate(myFile)
-        return
 
     def write_sentences_discarded_participate(self, myFile):
         dis_str_sentences = ''
@@ -828,52 +793,34 @@ class LexRank:
             par_str_sentences += str(sen_idx)
             par_str_sentences += ', '
         par_str_sentences = par_str_sentences[: -2]
-        myFile.write('<p><b> Sentences inside: </b> ' + str(par_str_sentences) + '<b> Sentence discarded: </b>' + str(dis_str_sentences) + '</p>')
-        return
+        myFile.write(
+            '<p><b> Sentences inside: </b> {} <b> Sentence discarded: </b> {} </p>'.format(
+                str(par_str_sentences), str(dis_str_sentences))
+        )
 
     # create list of color and percentile settings
     def create_red_green_gradient(self):
         from colour import Color
         red = Color("red")
-        self.color_list = list(red.range_to(Color("green"), 10))     # 10 color correspond to percentile values
-        self.percentile_list = self.percentile_color()               # 10 diff percentile values
-        return
+        number_gradient_color = 50
+        self.color_list = list(red.range_to(Color("green"), number_gradient_color))     # 10 color correspond to percentile values
+        self.percentile_list = self.percentile_color(number_gradient_color)               # 10 diff percentile values
 
     # get percentile of word contribute values
-    def percentile_color(self):
+    def percentile_color(self, num_color):
         import numpy as np
         c_l = self.word_cont_dict.values()
-        percentile_list = [
-            np.percentile(c_l, 10),
-            np.percentile(c_l, 20),
-            np.percentile(c_l, 30),
-            np.percentile(c_l, 40),
-            np.percentile(c_l, 50),
-            np.percentile(c_l, 60),
-            np.percentile(c_l, 70),
-            np.percentile(c_l, 80),
-            np.percentile(c_l, 90),
-            np.percentile(c_l, 100)
-        ]
+        ratio = np.float(100)/np.float(num_color)
+        percentile_list = [np.percentile(c_l, int(i * ratio)) for i in range(1, num_color+1)]
         Logger.info('Percentile contribute list: ' + str(percentile_list))
         return percentile_list
 
     # determine background color of word regard to personality contribute value
     def get_background_color(self, contribute):
-        import copy
         for per_idx, per_val in enumerate(self.percentile_list):
             if contribute <= per_val:
                 hex_color = self.color_list[per_idx]
                 return hex_color
-                # h = hex_color.lstrip('#')
-                h = copy.deepcopy(hex_color._hsl)
-                h.append(0.7)
-                # a = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-                # print('RGB =', tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)))
-                return tuple(h)
-                # return self.color_list[per_idx]
-        # self.color_list = list(red.range_to(Color("green"), 10))  # 10 color correspond to percentile values
-        # self.percentile_list = self.percentile_color()
 
     # directory path
     def create_file_path(self):
@@ -898,12 +845,9 @@ class LexRank:
 
         html_dir_path += '/'
 
-        # html_dir_path = self.html_dir + str(self.cur_time) + str(personality_str) + '_damping_factor=' + \
-        #                  str(self.damping_factor) + '/'
-
         import os
         if not os.path.exists(html_dir_path):
             os.makedirs(html_dir_path)
 
-        Logger.info('file dir: ' + str(html_dir_path))
+        Logger.info('file dir: {}'.format(str(html_dir_path)))
         return html_dir_path
