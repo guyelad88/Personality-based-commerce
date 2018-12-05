@@ -24,7 +24,7 @@ extract_big_five_inventory_score = {
 # determine how to filter descriptions
 filter_description = {
     'MAX_LENGTH': 1000,
-    'MIN_LENGTH': 10,
+    'MIN_LENGTH': 5,
     'DROP_NA': True,
     'DROP_MIN': True,
     'DROP_MAX': True,
@@ -52,7 +52,7 @@ filter_description = {
                                     'place your orders', 'we can assure', 'these discounts', 'item purchases',
                                     '30 days', 'money back'],
 
-    'VERTICAL': 'Fashion'   # None                    # None/Fashion/Electronics e.g
+    'VERTICAL': None    # 'Fashion'   # None                    # None/Fashion/Electronics e.g
 }
 
 # POS properties
@@ -95,19 +95,25 @@ personality_trait = ['agreeableness', 'extraversion', 'openness', 'conscientious
 
 balance_description = {
     'percentile_truncated': 95,
-    'max_descriptions': 35  # None
+    'max_descriptions': 35                          # None
 }
 
 test_lexrank = {
-    'summary_size': 'max', # 1=             # summarization length - 'max' or int
-    'threshold': 0.03,             # min edge weight between two sentences
-    'damping_factor': 0.5,        # probability not to jump
-    'summarization_similarity_threshold': 0.4,
+    'summary_size': 'max',                          # summarization length - 'max' or int
+    'HTML_summary_size': 3,
+    'threshold': 0.03,                              # min edge weight between two sentences - below remove the edge
+
+    # for vanilla-LexRank set damping factor to 0.8-0.9
+    'damping_factor': 0.2,                          # SM: probability not to jump
+
+    'summarization_similarity_threshold': 0.4,      # remove from summarization if the similarity is above
+
+    'corpus_size': 2000,            # 'max'/1000 - influence IDF - high number is leading to high computation time
+
     'target_sentences_length': {
         'min': 0,
         'max': 100
     },
-    'corpus_size': 1000,  # 'max'     # TODO be careful using this value - limit idf computation time
 
     # please don't change (damping factor:1 same effect)
     'personality_word_flag': True,
@@ -117,15 +123,20 @@ test_lexrank = {
     'lex_rank_algorithm_version': 'personality-based-LexRank',      # 'vanilla-LexRank', 'personality-based-LexRank'
     'summarization_version': 'top_relevant',                        # 'top_relevant', 'Bollegata', 'Shahaf'
 
+    'products_ids': ['B0192VWSSY'],                   # products id to create summary for them
+
     # current user personality - 'H'\'L'\'M' (high\low\miss(or mean)
     # TODO change it isn't the description we need to use
     'corpus_path_file': '../data/descriptions_data/1425 users input/merge_20048.csv',  # calculate idf from
-    'target_item_description_file': '../data/amazon_description/size=435_min_size=10_time=2018-08-23 12:41:02.csv',  # amazon_949
+
+    # 'target_item_description_file': '../data/amazon_description/size=435_min_size=10_time=2018-08-23 12:41:02.csv',  # amazon_949
+
+    # clean descriptions
+    'target_item_description_file': '../data/amazon_description/experiment_input_clean_description.csv',
+
     'trait_relative_path_dict': '../results/data/kl/uni-gram regular 2018-08-21 21:04:59/all_words_contribute',
     'personality_trait_dict': {
+        'extraversion': 'L',
         'openness': 'H',
-        'extraversion': 'H',
     }
 }
-
-

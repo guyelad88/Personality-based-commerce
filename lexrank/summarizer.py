@@ -300,13 +300,13 @@ class LexRank:
         if self.lex_rank_algorithm_version == 'personality-based-LexRank':
 
             # similarity matrix
-            Logger.info('')
-            Logger.info('build personality-based similarity matrix:')
+            Logger.debug('')
+            Logger.debug('build personality-based similarity matrix:')
             self.similarity_matrix_unnormalized = self._calculate_similarity_matrix(tf_scores)
             similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)   # normalize matrix row to 1
-            Logger.info('')
-            Logger.info('similarity matrix (normalize to 1)')
-            Logger.info(similarity_matrix)
+            Logger.debug('')
+            Logger.debug('similarity matrix (normalize to 1)')
+            Logger.debug(similarity_matrix)
             similarity_matrix = self.damping_factor * similarity_matrix     # multiple with damping factor
 
             # jump matrix
@@ -314,8 +314,8 @@ class LexRank:
             Logger.info('build jump matrix: damping factor=' + str(self.damping_factor))
             jump_matrix = self._calculate_personality_based_jump_matrix(tf_scores)            # calculate jump matrix
 
-            Logger.info('jump matrix (normalize to 1)')
-            Logger.info(jump_matrix)
+            Logger.debug('jump matrix (normalize to 1)')
+            Logger.debug(jump_matrix)
 
             jump_matrix = (1-self.damping_factor)*jump_matrix               # multiple with damping factor
 
@@ -521,7 +521,7 @@ class LexRank:
             Logger.info('')
         Logger.info('')
         Logger.info('similarity matrix unnormalized:')
-        Logger.info(similarity_matrix)
+        Logger.debug(similarity_matrix)
         return similarity_matrix
 
     # calculate weight between two sentences - for different LexRank algorithms
@@ -568,7 +568,7 @@ class LexRank:
         else:
             similarity = 0
 
-        Logger.info('i,j: ' + str(i) + ',' + str(j) + ' similarity=' + str(round(similarity, 4)))
+        Logger.debug('i,j: ' + str(i) + ',' + str(j) + ' similarity=' + str(round(similarity, 4)))
         return similarity
 
     # compute nominator of idf-modified-cosine
@@ -762,11 +762,11 @@ class LexRank:
                     cur_word_cont = self.word_cont_dict[cur_word_token]
                     cur_background = self.get_background_color(cur_word_cont)
                     myFile.write('<span style="background-color: ' + str(cur_background) + ';opacity: 0.8;">' +
-                                 str(' ') + str(cur_word) + str(' ') +
+                                 str(' ') + str(cur_word.encode('utf-8')) + str(' ') +
                                  '</span>')
                 else:
                     myFile.write('<span style="background-color: ' + str('#ffffff') + ';">' +
-                                 str(' ') + str(cur_word) + str(' ') +
+                                 str(' ') + str(cur_word.encode('utf-8')) + str(' ') +
                                  '</span>')
             myFile.write('</p>')
 
@@ -775,7 +775,7 @@ class LexRank:
         myFile.write('<p><b>Summarization method - </b>' + str(self.summarization_version) + ' output:</p>')
         myFile.write('<p></p><p>')
         for cur_sentence in self.description_summary_list:
-            myFile.write('<span>' + str(cur_sentence) + '. <br>' + '</span>')
+            myFile.write('<span>' + str(cur_sentence.encode('utf-8')) + '. <br>' + '</span>')
         myFile.write('</p>')
 
         # write sentences which discarded due to high similarity

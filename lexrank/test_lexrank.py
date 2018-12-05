@@ -1,4 +1,5 @@
 import json
+import math
 
 import pandas as pd
 from time import gmtime, strftime
@@ -10,6 +11,8 @@ from utils.logger import Logger
 
 
 SUMMARY_SIZE = config.test_lexrank['summary_size']
+HTML_SUMMARY_SIZE = config.test_lexrank['HTML_summary_size']
+
 THRESHOLD = config.test_lexrank['threshold']
 DAMPING_FACTOR = config.test_lexrank['damping_factor']
 SUMMARIZATION_SIMILARITY_THRESHOLD = config.test_lexrank['summarization_similarity_threshold']
@@ -19,6 +22,8 @@ CORPUS_SIZE = config.test_lexrank['corpus_size']
 
 PERSONALITY_WORD_FLAG = config.test_lexrank['personality_word_flag']
 RANDOM_WALK_FLAG = config.test_lexrank['random_walk_flag']
+
+PRODUCTS_IDS = config.test_lexrank['products_ids']      # id's to run algorithm on
 
 MULTI_DOCUMENT_SUMMARIZATION = config.test_lexrank['multi_document_summarization']
 LEX_RANK_ALGORITHM_VERSION = config.test_lexrank['lex_rank_algorithm_version']
@@ -61,8 +66,6 @@ class WrapperLexRank:
     log_dir = 'log/'
     html_dir = 'html/'
 
-
-
     :raises
 
     :returns
@@ -82,7 +85,7 @@ class WrapperLexRank:
     def init_debug_log(self):
         file_prefix = 'test_lexrank'
         self.log_file_name = '../log/{}_{}.log'.format(file_prefix, self.cur_time)
-        Logger.set_handlers('TestLexRank', self.log_file_name, level='debug')
+        Logger.set_handlers('TestLexRank', self.log_file_name, level='info')
 
     # extract corpus documents from a file
     def load_corpus_documents(self, corpus_file):
@@ -164,8 +167,16 @@ class WrapperLexRank:
         target_description_df = self.load_description_df()
 
         for index, cur_row_target_description in target_description_df.iterrows():
+            # print(index)
+            # print(cur_row_target_description['TITLE'])
 
             desc_id = cur_row_target_description['ID']
+
+            if not isinstance(desc_id, str):
+                if math.isnan(desc_id):
+                    Logger.info('Load Nan Id row - Skip')
+                    continue
+
             desc_title = cur_row_target_description['TITLE']
             target_sentences = json.loads(cur_row_target_description['DESCRIPTION'])
             num_sentences = cur_row_target_description['LENGTH']
@@ -173,7 +184,7 @@ class WrapperLexRank:
             # control amount of sentences
             if num_sentences > TARGET_SENTENCES_LENGTH_MAX or num_sentences < TARGET_SENTENCES_LENGTH_MIN:
                 continue
-            if desc_id != 'B0746GQ56P': # 'B06XXY79N1':   # 'B003MYYJD0':
+            if desc_id not in PRODUCTS_IDS:         #  baby bandana: 'B0746GQ56P'. 'B06XXY79N1', 'B003MYYJD0'
                 continue
 
             # define summarization length
@@ -233,7 +244,7 @@ class WrapperLexRank:
         Logger.info('summary extracted:')
         for sen_idx, sentence in enumerate(summary):
             Logger.info('idx: {}, score: {} - {}'.format(
-                str(sorted_ix[sen_idx]), str(round(lex_scores[sorted_ix[sen_idx]], 3)), str(sentence)
+                str(sorted_ix[sen_idx]), str(round(lex_scores[sorted_ix[sen_idx]], 3)), str(sentence.encode('utf-8'))
             ))
         Logger.info('')
         Logger.info('sentence order:')
@@ -245,7 +256,26 @@ class WrapperLexRank:
         Logger.info('Summary output')
         Logger.info(description_summary_list)
 
-        return
+        self.log_html_format(summary, sorted_ix)
+
+    def log_html_format(self, summary, sorted_ix):
+        """
+        :return: summary in HTML format, in length K (HTML_SUMMARY_SIZE) and ordered properly
+        """
+        relevant_summary = summary[:HTML_SUMMARY_SIZE]  # remain only first K sentences
+        relevant_sorted_ix = sorted_ix[:HTML_SUMMARY_SIZE]  # remain only first K sentences original place
+
+        def sort_list(list1, list2):
+            zipped_pairs = zip(list2, list1)
+            z = [x for _, x in sorted(zipped_pairs)]
+            return z
+
+        ordered_summary = sort_list(relevant_summary, relevant_sorted_ix)
+
+        Logger.info('')
+        Logger.info('Summary in HTML format')
+        Logger.info(". <br/>".join(ordered_summary) + ".")
+        Logger.info('')
 
 
 def main():

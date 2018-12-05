@@ -100,7 +100,7 @@ class CalculateWordContribute:
         list_word_contribute_sort = sorted(self.meta_word_contribute.items(), key=operator.itemgetter(1))
         list_word_contribute_sort.reverse()
 
-        top_show = 30
+        top_show = 10
         Logger.info('')
         Logger.info('log top k=' + str(top_show) + ' associated and unrelated words to user personality')
         Logger.info('')
@@ -112,7 +112,6 @@ class CalculateWordContribute:
                 line = self.get_line(w_i, word_cont_tuple)
                 Logger.info(line)
             except:
-                print('dkfd')
                 pass
 
         list_word_contribute_sort.reverse()
