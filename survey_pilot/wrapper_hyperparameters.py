@@ -5,7 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from build_feature_dataset import CalculateScore
 
+
 class Wrapper:
+
+    """
+    Predict trait from user's purchase data.
+    We seek for best configuration to the classifiers - i.e. purchase threshold amount, classifier penalty and
+    regularization strength.
+    """
 
     def __init__(self, participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name):
 
@@ -129,22 +136,22 @@ class Wrapper:
                                                    self.time_purchase_meta_feature_flag, self.vertical_ratio_feature_flag,
                                                    self.purchase_percentile_feature_flag, self.user_meta_feature_flag)
 
-                    calculate_obj.init_debug_log()          # init log file
-                    calculate_obj.load_clean_csv_results()  # load data set
-                    calculate_obj.clean_df()                # clean df - e.g. remain valid users only
-                    calculate_obj.create_feature_list()     # create x_feature
+                    calculate_obj.init_debug_log()                      # init log file
+                    calculate_obj.load_clean_csv_results()              # load data set
+                    calculate_obj.clean_df()                            # clean df - e.g. remain valid users only
+                    calculate_obj.create_feature_list()                 # create x_feature
 
                     # calculate personality trait per user + percentile per trait
-                    calculate_obj.change_reverse_value()            # change specific column into reverse mode
-                    calculate_obj.cal_participant_traits_values()   # calculate average traits and percentile value
-                    calculate_obj.insert_gender_feature()           # add gender feature
+                    calculate_obj.change_reverse_value()                # change specific column into reverse mode
+                    calculate_obj.cal_participant_traits_values()       # calculate average traits and percentile value
+                    calculate_obj.insert_gender_feature()               # add gender feature
 
                     calculate_obj.extract_user_purchase_connection()    # insert purchase and vertical type to model
                     calculate_obj.insert_money_feature()                # add feature contain money issue
                     calculate_obj.insert_time_feature()                 # add time purchase feature
 
-                    calculate_obj.calculate_logistic_regression()         # predict traits H or L
-                    # calculate_obj.calculate_linear_regression()             # predict traits score
+                    calculate_obj.calculate_logistic_regression()       # predict traits H or L
+                    # calculate_obj.calculate_linear_regression()       # predict traits score
 
                     print(threshold_purchase)
                     cur_key = 'C_' + str(cur_C) + '_Penalty_' + str(cur_penalty) + '_Threshold_' + str(threshold_purchase)

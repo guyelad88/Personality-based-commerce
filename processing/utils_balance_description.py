@@ -2,13 +2,13 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import config
+import lexrank_config
 
 from time import gmtime, strftime
 from utils.logger import Logger
 
-PERCENTILE_MAX_TRUNCATED = config.balance_description['percentile_truncated']       # present top words (30)
-MAX_DESCRIPTION = config.balance_description['max_descriptions']                    #
+PERCENTILE_MAX_TRUNCATED = lexrank_config.balance_description['percentile_truncated']       # present top words (30)
+MAX_DESCRIPTION = lexrank_config.balance_description['max_descriptions']                    #
 
 
 class BalanceDescription:

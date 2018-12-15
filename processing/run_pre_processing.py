@@ -9,7 +9,7 @@ from utils_pos import UtilsPOS
 from create_vocabularies import CreateVocabularies
 from calculate_kl import CalculateKL
 
-import config
+import lexrank_config
 
 
 class RunPreProcessing:
@@ -20,7 +20,7 @@ class RunPreProcessing:
     def __init__(self):
 
         self.time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        self.configuration = config.pre_processing_configs      # configuration of pre-process steps
+        self.configuration = lexrank_config.pre_processing_configs      # configuration of pre-process steps
         self.log_file_name = str()                              # allow access to the global log file name
 
     def init_debug_log(self):
@@ -54,9 +54,11 @@ class RunPreProcessing:
                 merge_df_path=merge_df_path,
                 log_file_name=self.log_file_name,
                 level='info')
-        """
 
-        merge_df_path = '../results/data/clean_description/12377_2018-08-21 09:08:14.csv'
+        """
+        """
+        merge_df_path = '../results/data/clean_description/12377_2018-08-28 12:59:46.csv' # new method remove short sentences
+        # merge_df_path = '../results/data/clean_description/12377_2018-08-21 09:08:14.csv'
         if self.configuration['filter_description']:
             Logger.info('filter description (language, length, etc..)')
 
@@ -102,9 +104,10 @@ class RunPreProcessing:
 
         Logger.info('final DF save to a file: {}'.format(merge_df_path))
         Logger.info('finish pre-processing')
-
+        """
         # NLP methods
         # merge_df_path = '../results/data/vocabularies/4195_2018-08-21 19:49:42.csv'
+        merge_df_path = '../results/data/vocabularies/4123_2018-08-28 13:35:17.csv'  # after new cleaning method
 
         if self.configuration['calculate_KL']:
             Logger.info('calculate KL between each trait groups')

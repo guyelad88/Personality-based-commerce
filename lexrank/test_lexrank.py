@@ -4,36 +4,36 @@ import math
 import pandas as pd
 from time import gmtime, strftime
 
-import config
+import lexrank_config
 from summarizer import LexRank
 from calculate_word_contribute import CalculateWordContribute
 from utils.logger import Logger
 
 
-SUMMARY_SIZE = config.test_lexrank['summary_size']
-HTML_SUMMARY_SIZE = config.test_lexrank['HTML_summary_size']
+SUMMARY_SIZE = lexrank_config.test_lexrank['summary_size']
+HTML_SUMMARY_SIZE = lexrank_config.test_lexrank['HTML_summary_size']
 
-THRESHOLD = config.test_lexrank['threshold']
-DAMPING_FACTOR = config.test_lexrank['damping_factor']
-SUMMARIZATION_SIMILARITY_THRESHOLD = config.test_lexrank['summarization_similarity_threshold']
-TARGET_SENTENCES_LENGTH_MIN = config.test_lexrank['target_sentences_length']['min']
-TARGET_SENTENCES_LENGTH_MAX = config.test_lexrank['target_sentences_length']['max']
-CORPUS_SIZE = config.test_lexrank['corpus_size']
+THRESHOLD = lexrank_config.test_lexrank['threshold']
+DAMPING_FACTOR = lexrank_config.test_lexrank['damping_factor']
+SUMMARIZATION_SIMILARITY_THRESHOLD = lexrank_config.test_lexrank['summarization_similarity_threshold']
+TARGET_SENTENCES_LENGTH_MIN = lexrank_config.test_lexrank['target_sentences_length']['min']
+TARGET_SENTENCES_LENGTH_MAX = lexrank_config.test_lexrank['target_sentences_length']['max']
+CORPUS_SIZE = lexrank_config.test_lexrank['corpus_size']
 
-PERSONALITY_WORD_FLAG = config.test_lexrank['personality_word_flag']
-RANDOM_WALK_FLAG = config.test_lexrank['random_walk_flag']
+PERSONALITY_WORD_FLAG = lexrank_config.test_lexrank['personality_word_flag']
+RANDOM_WALK_FLAG = lexrank_config.test_lexrank['random_walk_flag']
 
-PRODUCTS_IDS = config.test_lexrank['products_ids']      # id's to run algorithm on
+PRODUCTS_IDS = lexrank_config.test_lexrank['products_ids']      # id's to run algorithm on
 
-MULTI_DOCUMENT_SUMMARIZATION = config.test_lexrank['multi_document_summarization']
-LEX_RANK_ALGORITHM_VERSION = config.test_lexrank['lex_rank_algorithm_version']
-SUMMARIZATION_VERSION = config.test_lexrank['summarization_version']
-PERSONALITY_TRAIT_DICT = config.test_lexrank['personality_trait_dict']
+MULTI_DOCUMENT_SUMMARIZATION = lexrank_config.test_lexrank['multi_document_summarization']
+LEX_RANK_ALGORITHM_VERSION = lexrank_config.test_lexrank['lex_rank_algorithm_version']
+SUMMARIZATION_VERSION = lexrank_config.test_lexrank['summarization_version']
+PERSONALITY_TRAIT_DICT = lexrank_config.test_lexrank['personality_trait_dict']
 
 # data paths
-CORPUS_PATH_FILE = config.test_lexrank['corpus_path_file']
-TARGET_ITEM_DESCRIPTION_FILE = config.test_lexrank['target_item_description_file']
-TRAIT_RELATIVE_PATH_DICT = config.test_lexrank['trait_relative_path_dict']
+CORPUS_PATH_FILE = lexrank_config.test_lexrank['corpus_path_file']
+TARGET_ITEM_DESCRIPTION_FILE = lexrank_config.test_lexrank['target_item_description_file']
+TRAIT_RELATIVE_PATH_DICT = lexrank_config.test_lexrank['trait_relative_path_dict']
 
 log_dir = 'log/'
 html_dir = '../results/lexrank/html/'
@@ -103,7 +103,7 @@ class WrapperLexRank:
     # load item description to summarize
     def load_description_df(self):
 
-        target_description_df = pd.read_csv(TARGET_ITEM_DESCRIPTION_FILE)  # items and their descriptions
+        target_description_df = pd.read_excel(TARGET_ITEM_DESCRIPTION_FILE)  # items and their descriptions
 
         return target_description_df
 
@@ -112,27 +112,31 @@ class WrapperLexRank:
 
         for c_trait, user_value in PERSONALITY_TRAIT_DICT.iteritems():
             if user_value not in ['H', 'L', 'M']:
-                ValueError('unknown trait value')
+                raise ValueError('unknown trait value')
 
         if DAMPING_FACTOR < 0 or DAMPING_FACTOR > 1:
-            ValueError('damping factor must be a float between 0 to 1')
+            raise ValueError('damping factor must be a float between 0 to 1')
 
         if SUMMARIZATION_SIMILARITY_THRESHOLD < 0 or SUMMARIZATION_SIMILARITY_THRESHOLD > 1:
-            ValueError('summarization similarity threshold must be a float between 0 to 1')
+            raise ValueError('summarization similarity threshold must be a float between 0 to 1')
 
         if LEX_RANK_ALGORITHM_VERSION not in ['vanilla-LexRank', 'personality-based-LexRank']:
-            ValueError('unknown lex_rank_algorithm_version')
+            raise ValueError('unknown lex_rank_algorithm_version')
 
         if SUMMARIZATION_VERSION not in ['top_relevant', 'Bollegata', 'Shahaf']:
-            ValueError('unknown summarization_version')
+            raise ValueError('unknown summarization_version')
 
         if MULTI_DOCUMENT_SUMMARIZATION not in ['single', 'multi']:
-            ValueError('unknown multi_document_summarization value (not single nor multi)')
+            raise ValueError('unknown multi_document_summarization value (not single nor multi)')
 
         if CORPUS_SIZE != 'max' and not isinstance(CORPUS_SIZE, int):
-            ValueError('unknown corpus size variable')
+            raise ValueError('unknown corpus size variable')
 
-        return
+        if CORPUS_SIZE != 'max' and CORPUS_SIZE < 200:
+            raise ValueError('too small corpus size')
+
+        if LEX_RANK_ALGORITHM_VERSION == 'vanilla-LexRank' and DAMPING_FACTOR > 0.2:
+            raise ValueError('for vanilla LexRank damping factor must be below 0.2')
 
     # log class arguments
     def log_attribute_input(self):
@@ -170,15 +174,16 @@ class WrapperLexRank:
             # print(index)
             # print(cur_row_target_description['TITLE'])
 
-            desc_id = cur_row_target_description['ID']
+            desc_id = cur_row_target_description['ID'].encode('ascii', 'ignore')
 
             if not isinstance(desc_id, str):
                 if math.isnan(desc_id):
                     Logger.info('Load Nan Id row - Skip')
                     continue
 
-            desc_title = cur_row_target_description['TITLE']
+            desc_title = cur_row_target_description['TITLE'].encode('ascii', 'ignore')
             target_sentences = json.loads(cur_row_target_description['DESCRIPTION'])
+            target_sentences = [s.encode('ascii', 'ignore') for s in target_sentences]
             num_sentences = cur_row_target_description['LENGTH']
 
             # control amount of sentences
@@ -223,29 +228,36 @@ class WrapperLexRank:
             )
 
             # build similarity matrix, power method
-            summary, sorted_ix, lex_scores, description_summary_list = lxr.get_summary(
+            summary, sorted_ix, lex_scores, description_summary_list, discarded_sentences_list = lxr.get_summary(
                 target_sentences,
                 summary_size,
                 THRESHOLD,
                 discretize=False)
 
             # write results into log file
-            self.log_results(summary, sorted_ix, lex_scores, description_summary_list)
+            self.log_results(summary, sorted_ix, lex_scores, description_summary_list, discarded_sentences_list)
 
             # build a sentences
             lxr.build_summarization_html()
 
     # log results after finish algorithm
-    def log_results(self, summary, sorted_ix, lex_scores, description_summary_list):
+    def log_results(self, summary, sorted_ix, lex_scores, description_summary_list, discarded_sentences_list):
         '''
         log results of LexRank algorithm
         '''
+        summary_below_threshold = list()
+        sorted_ix_below_threshold = list()
+
         Logger.info('')
         Logger.info('summary extracted:')
         for sen_idx, sentence in enumerate(summary):
             Logger.info('idx: {}, score: {} - {}'.format(
                 str(sorted_ix[sen_idx]), str(round(lex_scores[sorted_ix[sen_idx]], 3)), str(sentence.encode('utf-8'))
             ))
+            if sorted_ix[sen_idx] not in discarded_sentences_list:
+                summary_below_threshold.append(sentence.encode('utf-8'))
+                sorted_ix_below_threshold.append(sorted_ix[sen_idx])
+
         Logger.info('')
         Logger.info('sentence order:')
         Logger.info(sorted_ix)
@@ -256,12 +268,15 @@ class WrapperLexRank:
         Logger.info('Summary output')
         Logger.info(description_summary_list)
 
-        self.log_html_format(summary, sorted_ix)
+        # self.log_html_format(summary, sorted_ix, discarded_sentences_list)
+        self.log_html_format(summary_below_threshold, sorted_ix_below_threshold)
+        # self.log_html_format(summary_below_threshold, sorted_ix_below_threshold)
 
     def log_html_format(self, summary, sorted_ix):
         """
         :return: summary in HTML format, in length K (HTML_SUMMARY_SIZE) and ordered properly
         """
+
         relevant_summary = summary[:HTML_SUMMARY_SIZE]  # remain only first K sentences
         relevant_sorted_ix = sorted_ix[:HTML_SUMMARY_SIZE]  # remain only first K sentences original place
 
@@ -271,7 +286,10 @@ class WrapperLexRank:
             return z
 
         ordered_summary = sort_list(relevant_summary, relevant_sorted_ix)
-
+        ordered_summary = [sen[0].upper() + sen[1:] for sen in ordered_summary]
+        Logger.info('')
+        Logger.info(LEX_RANK_ALGORITHM_VERSION)
+        Logger.info(PERSONALITY_TRAIT_DICT)
         Logger.info('')
         Logger.info('Summary in HTML format')
         Logger.info(". <br/>".join(ordered_summary) + ".")

@@ -6,16 +6,16 @@ import pickle
 import numpy as np
 from time import gmtime, strftime
 
-import config
+import lexrank_config
 from utils.logger import Logger
 
-GAP_VALUE = config.create_vocabularies['gap_value']
+GAP_VALUE = lexrank_config.create_vocabularies['gap_value']
 # SPLIT_METHOD = config.create_vocabularies['split_method']
 # PERSONALITY_TRAIT = config.create_vocabularies['personality_trait']
 # VERTICAL = config.create_vocabularies['vertical']
 # VOCABULARY_METHOD = config.create_vocabularies['vocabulary_method']
 
-PERSONALITY_TRAIT_LIST = config.personality_trait       # list of the big five PT
+PERSONALITY_TRAIT_LIST = lexrank_config.personality_trait       # list of the big five PT
 
 
 # create vocabularies by grouping factor

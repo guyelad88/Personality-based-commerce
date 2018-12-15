@@ -1,17 +1,33 @@
 from __future__ import print_function
 import pandas as pd
-import logging
+import os
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
+import random
+
+from utils.logger import Logger
+from config import bfi_config
+from build_item_aspect_feature import BuildItemAspectScore
+
+from xgboost import XGBClassifier
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn import linear_model, model_selection
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, roc_curve, auc
+from sklearn.feature_selection import SelectKBest, f_classif
+
 
 class CalculateScore:
 
     def __init__(self, participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name,
-                 threshold_purchase, bool_slice_gap_percentile=True, bool_normalize_features=True, cur_C=2,
+                 threshold_purchase, bool_slice_gap_percentile=True, bool_normalize_features=True, C=2,
                  cur_penalty='l1', time_purchase_ratio_feature_flag=True, time_purchase_meta_feature_flag=True,
                  vertical_ratio_feature_flag=True, purchase_percentile_feature_flag=True,
                  user_meta_feature_flag=True, aspect_feature_flag=True, h_limit=0.6, l_limit=0.4,
-                 k_best=10, plot_directory='', user_type='all', normalize_traits=True):
+                 k_best=10, plot_directory='', user_type='all', normalize_traits=True, classifier_type='xgb',
+                 split_bool=False, xgb_c=1, xgb_eta=0.1, xgb_max_depth=4, dir_logistic_results='', cur_time='',
+                 k_best_feature_flag=True):
 
         # file arguments
         self.participant_file = participant_file
@@ -19,6 +35,8 @@ class CalculateScore:
         self.purchase_history_file = purchase_history_file
         self.valid_users_file = valid_users_file
         self.dir_analyze_name = dir_analyze_name
+        self.dir_logistic_results = dir_logistic_results
+        self.cur_time = cur_time
 
         # define data frame needed for analyzing data
         self.participant_df = pd.DataFrame()
@@ -29,31 +47,17 @@ class CalculateScore:
         self.merge_df = pd.DataFrame()                  # merge df - final for analyze and correlation
         self.raw_df = pd.DataFrame()                    # raw data df using in prediction function
 
-        self.avg_openness = 0
-        self.avg_conscientiousness = 0
-        self.avg_extraversion = 0
-        self.avg_agreeableness = 0
-        self.avg_neuroticism = 0
+        self.avg_openness, self.avg_conscientiousness, self.avg_extraversion, self.avg_agreeableness, \
+            self.avg_neuroticism = 0, 0, 0, 0, 0
 
-        self.ratio_hundred_openness = 0
-        self.ratio_hundred_conscientiousness = 0
-        self.ratio_hundred_extraversion = 0
-        self.ratio_hundred_agreeableness = 0
-        self.ratio_hundred_neuroticism = 0
+        self.ratio_hundred_openness, self.ratio_hundred_conscientiousness, self.ratio_hundred_extraversion, \
+            self.ratio_hundred_agreeableness, self.ratio_hundred_neuroticism = 0, 0, 0, 0, 0
 
-        self.global_test = 0.0
-        self.global_train_cv = 0.0
-        self.global_counter = 0.0
-
-        self.question_openness = [5, 10, 15, 20, 25, 30, 35, 40, 41, 44]
-        self.question_conscientiousness = [3, 8, 13, 18, 23, 28, 33, 43]
-        self.question_extraversion = [1, 6, 11, 16, 21, 26, 31, 36]
-        self.question_agreeableness = [2, 7, 12, 17, 22, 27, 32, 37, 42]
-        self.question_neuroticism = [4, 9, 14, 19, 24, 29, 34, 39]
-
-        from time import gmtime, strftime
-        self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        self.verbose_flag = True
+        self.question_openness = bfi_config.bfi_test_information['question_openness']
+        self.question_conscientiousness = bfi_config.bfi_test_information['question_openness']
+        self.question_extraversion = bfi_config.bfi_test_information['question_openness']
+        self.question_agreeableness = bfi_config.bfi_test_information['question_openness']
+        self.question_neuroticism = bfi_config.bfi_test_information['question_neuroticism']
 
         # help to calculate percentile
         self.openness_score_list = list()
@@ -67,16 +71,18 @@ class CalculateScore:
         self.median_cost_list = list()
         self.q3_cost_list = list()
         self.max_cost_list = list()
-
-        self.valid_user_list = list()   # valid users
+        self.valid_user_list = list()       # valid users
+        self.lr_x_feature = list()
 
         self.item_buyer_dict = dict()       # item-buyer dict 1:N
         self.user_name_id_dict = dict()     # missing data because it 1:N
         self.user_id_name_dict = dict()     #
 
+        self.models_results = list()        # store model result (later will insert into a result CSV)
+
         # system hyper_parameter
         self.threshold_purchase = threshold_purchase    # throw below this number
-        self.C = cur_C
+        self.C = C
         self.penalty = cur_penalty
         self.bool_slice_gap_percentile = bool_slice_gap_percentile
         self.bool_normalize_features = bool_normalize_features
@@ -84,137 +90,72 @@ class CalculateScore:
         self.test_fraction = 0.2
         self.h_limit = h_limit
         self.l_limit = l_limit
-        self.k_best = k_best                        # number of k_best feature to select
+
+        self.k_best_feature_flag = k_best_feature_flag
+        self.k_best = random.randint(8, 20)     # k_best  # number of k_best feature to select
+
         self.plot_directory = plot_directory
         self.user_type = user_type                  # user type in model 'all'/'cf'/'ebay-tech'
         self.normalize_traits = normalize_traits    # normalize each trait to 0-1
+        self.classifier_type = classifier_type
+        self.split_bool = split_bool                # run CV or just test-train
+        self.xgb_c = xgb_c
+        self.xgb_eta = xgb_eta
+        self.xgb_max_depth = xgb_max_depth
+        self.xgb_n_estimators = random.randint(300, 1000)
+        self.xgb_subsample = round(random.uniform(0.6, 1), 2)
+        self.xgb_colsample_bytree = round(random.uniform(0.6, 1), 2)
 
-        self.pearson_relevant_feature = ['Age', 'openness_percentile',
-                   'conscientiousness_percentile', 'extraversion_percentile', 'agreeableness_percentile',
-                   'neuroticism_percentile', 'number_purchase', 'Electronics_ratio', 'Fashion_ratio',
-                   'Home & Garden_ratio', 'Collectibles_ratio', 'Lifestyle_ratio', 'Parts & Accessories_ratio',
-                   'Business & Industrial_ratio', 'Media_ratio']
+        """
+        self.xgb_n_estimators = bfi_config.predict_trait_configs['xgb_n_estimators']
+        self.xgb_subsample = bfi_config.predict_trait_configs['xgb_subsample']
+        self.xgb_colsample_bytree = bfi_config.predict_trait_configs['xgb_colsample_bytree']
+        """
 
-        self.lr_x_feature = list()
+        self.pearson_relevant_feature = bfi_config.feature_data_set['pearson_relevant_feature']
 
-        self.lr_y_feature = ['agreeableness_trait', 'extraversion_trait', 'neuroticism_trait', 'conscientiousness_trait', 'openness_trait']
-
-        # traits to check
-        self.lr_y_logistic_feature = ['openness_group', 'conscientiousness_group', 'extraversion_group','agreeableness_group', 'neuroticism_group']
-        # self.lr_y_logistic_feature = ['openness_group']
-
-        # trait to predict in regression model
-        self.lr_y_linear_feature = ['openness_group', 'conscientiousness_group', 'extraversion_group',
-                                      'agreeableness_group', 'neuroticism_group']
-        self.trait_percentile = ['openness_percentile', 'conscientiousness_percentile', 'extraversion_percentile',
-                                      'agreeableness_percentile', 'neuroticism_percentile']
-
-        self.map_dict_percentile_group = {
-            'extraversion_group': 'extraversion_percentile',
-            'openness_group': 'openness_percentile',
-            'conscientiousness_group': 'conscientiousness_percentile',
-            'agreeableness_group': 'agreeableness_percentile',
-            'neuroticism_group': 'neuroticism_percentile'
-
-        }
+        self.lr_y_feature = bfi_config.feature_data_set['lr_y_feature']
+        self.lr_y_logistic_feature = bfi_config.feature_data_set['lr_y_logistic_feature']
+        self.lr_y_linear_feature = bfi_config.feature_data_set['lr_y_linear_feature']
+        self.trait_percentile = bfi_config.feature_data_set['trait_percentile']
+        self.map_dict_percentile_group = bfi_config.feature_data_set['map_dict_percentile_group']
 
         self.time_purchase_ratio_feature_flag = time_purchase_ratio_feature_flag
         self.time_purchase_meta_feature_flag = time_purchase_meta_feature_flag
         self.vertical_ratio_feature_flag = vertical_ratio_feature_flag
-        self.purchase_price_feature_flag = False
+        self.purchase_price_feature_flag = False                        # if true is overlap with purchase percentile
         self.purchase_percentile_feature_flag = purchase_percentile_feature_flag
         self.user_meta_feature_flag = user_meta_feature_flag
         self.aspect_feature_flag = aspect_feature_flag
 
-        self.time_purchase_ratio_feature = ['day_ratio', 'evening_ratio', 'night_ratio', 'weekend_ratio']
-        self.time_purchase_meta_feature = ['first_purchase', 'last_purchase', 'tempo_purchase']
+        self.time_purchase_ratio_feature = bfi_config.feature_data_set['time_purchase_ratio_feature']
+        self.time_purchase_meta_feature = bfi_config.feature_data_set['time_purchase_meta_feature']
+        self.vertical_ratio_feature = bfi_config.feature_data_set['vertical_ratio_feature']
+        self.purchase_price_feature = bfi_config.feature_data_set['purchase_price_feature']
+        self.purchase_percentile_feature = bfi_config.feature_data_set['purchase_percentile_feature']
+        self.user_meta_feature = bfi_config.feature_data_set['user_meta_feature']
+        self.aspect_feature = bfi_config.feature_data_set['aspect_feature']
 
-        self.vertical_ratio_feature = ['Electronics_ratio', 'Fashion_ratio', 'Home & Garden_ratio', 'Collectibles_ratio',
-                               'Lifestyle_ratio', 'Parts & Accessories_ratio', 'Business & Industrial_ratio',
-                               'Media_ratio']
-
-        self.purchase_price_feature = ['median_purchase_price', 'q1_purchase_price', 'q3_purchase_price',
-                                 'min_purchase_price', 'max_purchase_price']
-
-        self.purchase_percentile_feature = ['median_purchase_price_percentile', 'q1_purchase_price_percentile',
-                                    'q3_purchase_price_percentile', 'min_purchase_price_percentile',
-                                    'max_purchase_price_percentile']
-
-        self.user_meta_feature = ['Age', 'gender', 'number_purchase']
-
-        self.aspect_feature = ['color_ratio', 'colorful_ratio', 'protection_ratio', 'country_ratio', 'brand_ratio',
-                               'brand_unlabeled_ratio']
-
-        self.logistic_regression_accuracy = {
-            'openness': 0.0,
-            'conscientiousness': 0.0,
-            'extraversion': 0.0,
-            'agreeableness': 0.0,
-            'neuroticism': 0.0
+        measure_template = {
+                'openness': 0.0,
+                'conscientiousness': 0.0,
+                'extraversion': 0.0,
+                'agreeableness': 0.0,
+                'neuroticism': 0.0
         }
 
-        self.logistic_regression_roc = {
-            'openness': 0.0,
-            'conscientiousness': 0.0,
-            'extraversion': 0.0,
-            'agreeableness': 0.0,
-            'neuroticism': 0.0
-        }
-
-        self.logistic_regression_accuracy_cv = {
-            'openness': 0.0,
-            'conscientiousness': 0.0,
-            'extraversion': 0.0,
-            'agreeableness': 0.0,
-            'neuroticism': 0.0
-        }
-
-        self.linear_regression_mae = {
-            'openness': 0.0,
-            'conscientiousness': 0.0,
-            'extraversion': 0.0,
-            'agreeableness': 0.0,
-            'neuroticism': 0.0
-        }
-
-        self.linear_regression_pearson = {
-            'openness': 0.0,
-            'conscientiousness': 0.0,
-            'extraversion': 0.0,
-            'agreeableness': 0.0,
-            'neuroticism': 0.0
-        }
-
-    def init_debug_log(self):
-        import logging
-
-        lod_file_name = '/Users/gelad/Personality-based-commerce/BFI_results/log/' + 'build_feature_dataset_' + str(self.cur_time) + '.log'
-
-        # logging.getLogger().addHandler(logging.StreamHandler())
-
-        logging.basicConfig(filename=lod_file_name,
-                            format='%(asctime)s, %(levelname)s %(message)s',
-                            datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
-
-        # print result in addition to log file
-        if self.verbose_flag:
-            stderrLogger = logging.StreamHandler()
-            stderrLogger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-            logging.getLogger().addHandler(stderrLogger)
-
-        logging.info("")
-        logging.info("")
-        logging.info("start log program")
-
-        return
+        self.logistic_regression_accuracy = dict(measure_template)
+        self.logistic_regression_roc = dict(measure_template)
+        self.logistic_regression_accuracy_cv = dict(measure_template)
+        self.linear_regression_mae = dict(measure_template)
+        self.linear_regression_pearson = dict(measure_template)
 
     # load csv into df
     def load_clean_csv_results(self):
 
         self.participant_df = pd.read_csv(self.participant_file)
         self.item_aspects_df = pd.read_csv(self.item_aspects_file)
-        self.purchase_history_df = pd.read_csv(self.purchase_history_file)
+        self.purchase_history_df = pd.read_csv(self.purchase_history_file, error_bad_lines=False)
         self.valid_users_df = pd.read_csv(self.valid_users_file)
 
         return
@@ -237,8 +178,6 @@ class CalculateScore:
 
         self.participant_df = self.participant_df[self.participant_df['eBay site user name'].isin(self.valid_user_list)]
 
-        return
-
     def insert_gender_feature(self):
 
         self.merge_df = self.participant_df.copy()
@@ -247,31 +186,31 @@ class CalculateScore:
             np.where(self.merge_df['Gender'] == 'Male', 1, 0)
 
         self.merge_df.to_csv(self.dir_analyze_name + 'merge_df_gender.csv')
-        logging.info('')
-        logging.info('add gender feature')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_gender.csv')
+        Logger.info('')
+        Logger.info('add gender feature')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_gender.csv')
         return
 
     # remain users regards to user_type variable (eBay/tech/CF)
     def remove_except_cf(self):
 
-        logging.info('')
-        logging.info('extract user regards to user_type variable ' + str(self.user_type))
+        Logger.info('')
+        Logger.info('extract user regards to user_type variable ' + str(self.user_type))
 
         if self.user_type not in ['all', 'cf', 'ebay-tech']:
             raise('undefined user_type: ' + str(self.user_type))
 
         if self.user_type == 'cf':
-            logging.info('Remain only users from CF')
+            Logger.info('Remain only users from CF')
             self.merge_df = self.merge_df.loc[self.merge_df['Site'] == 'CF']
-            logging.info('CF users: ' + str(self.merge_df.shape[0]))
+            Logger.info('CF users: ' + str(self.merge_df.shape[0]))
         elif self.user_type == 'ebay-tech':
-            logging.info('Remain only users from eBay and Tech')
+            Logger.info('Remain only users from eBay and Tech')
             self.merge_df = self.merge_df.loc[self.merge_df['Site'] != 'CF']
-            logging.info('Is users: ' + str(self.merge_df.shape[0]))
+            Logger.info('Is users: ' + str(self.merge_df.shape[0]))
         elif self.user_type == 'all':
-            logging.info('Remain all users')
-            logging.info('Is users: ' + str(self.merge_df.shape[0]))
+            Logger.info('Remain all users')
+            Logger.info('Is users: ' + str(self.merge_df.shape[0]))
         return
 
     # create_feature_list
@@ -306,9 +245,9 @@ class CalculateScore:
         self._insert_purchase_vertical_data(user_id_name_dict)
 
         self.merge_df.to_csv(self.dir_analyze_name + 'merge_df.csv')
-        logging.info('')
-        logging.info('add user purchase connection')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df.csv')
+        Logger.info('')
+        Logger.info('add user purchase connection')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df.csv')
         return
 
     # remove participant with purchase amount below threshold
@@ -317,18 +256,18 @@ class CalculateScore:
         # remove user buy less than threshold
         before_slice_users = self.merge_df.shape[0]
         self.merge_df = self.merge_df.loc[self.merge_df['number_purchase'] >= self.threshold_purchase]
-        logging.info('')
-        logging.info('Threshold used: ' + str(self.threshold_purchase))
-        logging.info('# participant after slice threshold: ' + str(self.merge_df.shape[0]))
-        logging.info('# participant deleted: ' + str(before_slice_users - self.merge_df.shape[0]))
-        logging.info('# purchases threshold q1: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.25]))
-        logging.info('# purchases threshold median: ' + str(self.merge_df['number_purchase'].median()))
-        logging.info('# purchases threshold q3: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.75]))
+        Logger.info('')
+        Logger.info('Threshold used: ' + str(self.threshold_purchase))
+        Logger.info('# participant after slice threshold: ' + str(self.merge_df.shape[0]))
+        Logger.info('# participant deleted: ' + str(before_slice_users - self.merge_df.shape[0]))
+        Logger.info('# purchases threshold q1: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.25]))
+        Logger.info('# purchases threshold median: ' + str(self.merge_df['number_purchase'].median()))
+        Logger.info('# purchases threshold q3: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.75]))
 
         self.merge_df.to_csv(self.dir_analyze_name + 'purchase_amount_after_threshold.csv')
-        logging.info('')
-        logging.info('slice particpant below purchase threshold')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'purchase_amount_after_threshold.csv')
+        Logger.info('')
+        Logger.info('slice particpant below purchase threshold')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'purchase_amount_after_threshold.csv')
 
         # histogram of number of purchases
         plt.hist(histogram_purchase_list, bins=30)
@@ -339,7 +278,6 @@ class CalculateScore:
         plt.savefig(plot_name, bbox_inches='tight')
         # plt.show()
         plt.close()
-        return
 
     # connect to purchase per vertical
     def _insert_purchase_vertical_data(self, user_id_name_dict):
@@ -347,7 +285,7 @@ class CalculateScore:
         # plot number of purchase per vertical
         vertical_list = list(self.purchase_history_df['BSNS_VRTCL_NAME'].unique())
         amount_series = self.purchase_history_df['BSNS_VRTCL_NAME'].value_counts()
-        logging.info('Number of purchases: ' + str(len(self.purchase_history_df['BSNS_VRTCL_NAME'])))
+        Logger.info('Number of purchases: ' + str(len(self.purchase_history_df['BSNS_VRTCL_NAME'])))
         amount_series.plot.bar(figsize=(8, 6))
         plt.title('Vertical vs. Purchase amount')
         plt.ylabel('Purchase Amount')
@@ -360,7 +298,7 @@ class CalculateScore:
 
         # participant amount and ratio per vertical
         for cur_vertical, vertical_amount in amount_series.iteritems():
-            logging.info('Vertical: ' + str(cur_vertical) + ', Amount: ' + str(vertical_amount))
+            Logger.info('Vertical: ' + str(cur_vertical) + ', Amount: ' + str(vertical_amount))
             self.merge_df[str(cur_vertical) + '_amount'] = 0.0
             self.merge_df[str(cur_vertical) + '_ratio'] = 0.0
         # amount and ratio for each vertical
@@ -401,62 +339,14 @@ class CalculateScore:
         # a. histogram of common aspect, total and per vertical
         # self.item_aspects_df = pd.read_csv(self.item_aspects_file)
 
-        logging.info('')
-        logging.info('start to extract item aspect feature')
-
-        from build_item_aspect_feature import BuildItemAspectScore
+        Logger.info('')
+        Logger.info('start to extract item aspect feature')
 
         item_aspect_obj = BuildItemAspectScore(self.item_aspects_df, self.participant_df, self.purchase_history_df,
                                                self.valid_users_df, self.merge_df, self.user_id_name_dict, self.aspect_feature)
         item_aspect_obj.add_aspect_features()
         self.merge_df = item_aspect_obj.merge_df
-        logging.info('number of features after add item aspect: ' + str(self.merge_df.shape[1]))
-
-        # self.corr_df = self.merge_df[pearson_f]
-        # corr_df = self.merge_df.corr(method='pearson')
-        # corr_df.to_csv(self.dir_analyze_name + 'corr_df_item_aspect.csv')
-        # a = 5
-        '''
-        print common item aspect histogram
-        aspect_type_dict = self.item_aspects_df['PRDCT_ASPCT_NM'].value_counts().to_dict()
-        import operator
-        aspect_sort_list = sorted(aspect_type_dict.items(), key=operator.itemgetter(1))  # sort aspect by their common
-        aspect_sort_list.reverse()
-
-        sum_total = self.item_aspects_df['PRDCT_ASPCT_NM'].value_counts().sum()
-        amount_series_top_K = self.item_aspects_df['PRDCT_ASPCT_NM'].value_counts().nlargest(n=20)
-        sum_top_k = amount_series_top_K.sum()
-        ratio_remain = float(sum_top_k)/float(sum_total)
-        amount_series_top_K.plot.bar(figsize=(8, 6))
-        plt.title('TOP 20 item aspect vs. aspect amount, aspect remain: ' + str(round(ratio_remain, 2)))
-        plt.ylabel('Amount')
-        plt.xlabel('Aspect')
-        plt.xticks(rotation=35)
-        # plot_name = dir_analyze_name + 'top_k_aspects_vs_amount' + '.png'
-        # plt.savefig(plot_name, bbox_inches='tight')
-        plt.show()
-        plt.close()'''
-
-        # b. insert aspect per item
-        # dict key val
-
-        '''aa = self.item_aspects_df.loc[self.item_aspects_df['PRDCT_ASPCT_NM'] == 'Color']
-
-        a = aa.groupby(['ASPCT_VLU_NM'])
-        for buyer_id, group in a:
-            print(str(buyer_id) + ': ' + str(group.shape[0]))
-        raise
-        self.item_buyer_dict = dict(zip(self.purchase_history_df['item_id'], self.purchase_history_df['buyer_id']))
-        grouped = self.purchase_history_df.groupby(['buyer_id'])  # groupby how many each user bought
-
-        for buyer_id, group in grouped:
-            user_items = group['item_id'].tolist()
-            for item_index, item_id in enumerate(user_items):
-
-                cur_item_aspect_df = self.item_aspects_df.loc[self.item_aspects_df['item_id'] == item_id]
-                # TODO insert feature of aspects'''
-
-        return
+        Logger.info('number of features after add item aspect: {}'.format(self.merge_df.shape[1]))
 
     # TODO edit - add textual feature
     def textual_feature(self):
@@ -466,16 +356,16 @@ class CalculateScore:
     # normalize trait to 0-1 scale (div by 5)
     def normalize_personality_trait(self):
 
-        logging.info('')
-        logging.info('normalize flag: ' + str(self.normalize_traits))
+        Logger.info('')
+        Logger.info('normalize flag: ' + str(self.normalize_traits))
         if self.normalize_traits:
             for c_trait in self.lr_y_feature:
                 self.merge_df[c_trait] = self.merge_df[c_trait] / 5.0
-                logging.info('finish normalize trait: ' + str(c_trait))
-                logging.info('Average trait: ' + str(self.merge_df[c_trait].mean()))
-                logging.info('Std trait: ' + str(self.merge_df[c_trait].std()))
-
-        return
+                Logger.info('normalize trait: {}, Avg: {}, Std: {}'.format(
+                    c_trait,
+                    round(self.merge_df[c_trait].mean(), 2),
+                    round(self.merge_df[c_trait].std(), 2)
+                ))
 
     # calculate traits valuers and percentile per participant
     def cal_participant_traits_values(self):
@@ -485,12 +375,12 @@ class CalculateScore:
 
         # add average traits columns
         for (idx, row_participant) in self.participant_df.iterrows():
-            logging.info('Calculate traits value for participant: ' + str(row_participant['Email address']))
+            Logger.info('Calculate traits value for participant: ' + str(row_participant['Email address']))
             self._calculate_individual_score(idx, row_participant)
 
         # add percentile traits columns
         for (idx, row_participant) in self.participant_df.iterrows():
-            # logging.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
+            # Logger.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
             self._cal_participant_traits_percentile_values(idx, row_participant)
 
         # after calculate traits score+percentile extract only relevant features
@@ -589,17 +479,17 @@ class CalculateScore:
     # add price features - value and percentile
     def insert_money_feature(self):
 
-        logging.info('')
-        logging.info('extract money features')
+        Logger.info('')
+        Logger.info('extract money features')
 
         self._add_price_feature_columns()
         self._add_price_feature()                # insert value feature
         self._add_percentile_price_feature()     # insert percentile feature
 
         self.merge_df.to_csv(self.dir_analyze_name + 'merge_df_cost_value_percentile.csv')
-        logging.info('')
-        logging.info('add cost value percentile features')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_cost_value_percentile.csv')
+        Logger.info('')
+        Logger.info('add cost value percentile features')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_cost_value_percentile.csv')
         return
 
     # define money columns in DF
@@ -689,7 +579,7 @@ class CalculateScore:
         add_per_day = float(1)/float(365)
         import time
         price_group = self.purchase_history_df.groupby(['buyer_id'])
-
+        # self.purchase_history_df['TRX_Timestamp'] = pd.to_datetime(self.purchase_history_df['TRX_Timestamp'])
         # iterate over each user
         for buyer_id, group in price_group:
 
@@ -724,7 +614,11 @@ class CalculateScore:
             cnt_non_weekend = 0
             for cur_per in purchase_time_list:
 
-                time_object = time.strptime(cur_per, '%d/%m/%Y %H:%M')
+                # until 8.12
+                # time_object = time.strptime(cur_per, '%d/%m/%Y %H:%M')
+
+                # 8.12
+                time_object = time.strptime(cur_per[:-2], '%Y-%m-%d %H:%M:%S')
                 # cal first/last purchase and tempo
                 if time_object.tm_year < user_count_type['first_year'] or (time_object.tm_year == user_count_type['first_year'] and time_object.tm_yday < user_count_type['first_day']):
                     user_count_type['first_year'] = time_object.tm_year
@@ -793,9 +687,9 @@ class CalculateScore:
             self.merge_df.at[cur_idx, 'tempo_purchase'] = user_count_type['tempo_purchase']
 
         self.merge_df.to_csv(self.dir_analyze_name + 'merge_df_time_purchase.csv')
-        logging.info('')
-        logging.info('add time purchase features')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_time_purchase.csv')
+        Logger.info('')
+        Logger.info('add time purchase features')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df_time_purchase.csv')
         return
 
     # mapping of user country and time zone
@@ -805,6 +699,7 @@ class CalculateScore:
         def find_shift(country):        # relative to -7 (server in USA)
             return {
                 'Israel': 10,
+                'South Africa': 10,
                 'Spain': 8,
                 'Canada': 3,            # TODO
                 'Russia': 11,           # TODO
@@ -827,7 +722,17 @@ class CalculateScore:
                 'Serbia': 9,
                 'Australia': 17,
                 'Angola': 8,
-                'Argentina': 3
+                'Argentina': 3,
+                'Albania': 9,
+                'China': 16,
+                'Paraguay': 5,
+                'Slovenia': 9,
+                'Peru': 3,
+                'Honduras': 2,
+                'Netherlands': 9,
+                'Algeria': 9,
+                'India': 13,
+                'Poland': 9,
             }[country]
 
         # TODO add countries
@@ -861,7 +766,7 @@ class CalculateScore:
         elif isinstance(type(self.user_id_name_dict.keys()[0]), basestring):
             key_type = 'str'
         else:
-            raise('unknown key type: self.user_id_name_dict.keys()[0]')
+            raise ValueError('unknown key type: self.user_id_name_dict.keys()[0]')
 
         sum = 0
         counter_id = 0
@@ -886,125 +791,54 @@ class CalculateScore:
                 sum += group.shape[0]
 
         # calculate purchase threshold
-        logging.info('# participant: ' + str(self.merge_df.shape[0]))
-        logging.info('# purchases q1: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.25]))
-        logging.info('# purchases median: ' + str(self.merge_df['number_purchase'].median()))
-        logging.info('# purchases q3: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.75]))
+        Logger.info('# participant: ' + str(self.merge_df.shape[0]))
+        Logger.info('# purchases q1: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.25]))
+        Logger.info('# purchases median: ' + str(self.merge_df['number_purchase'].median()))
+        Logger.info('# purchases q3: ' + str(self.merge_df['number_purchase'].quantile([.25, .5, .75])[0.75]))
 
         return self.user_id_name_dict, histogram_purchase_list
 
-    # calculate pearson correlation for each two features
-    def calculate_pearson_correlation_old(self):
+    def calculate_pearson_correlation(self):
 
-        pearson_f = self.lr_x_feature + self.lr_y_feature       # feature using in calculate pearson
-        self.corr_df = self.merge_df[pearson_f]
-        corr_df = self.corr_df.corr(method='pearson')
-        corr_df.to_csv(dir_analyze_name + 'corr_df.csv')
-        corr_abs = corr_df.abs()
-        pair_feature_corr = corr_abs.unstack().sort_values(ascending=False).to_dict()
+        corr_df = self.merge_df.corr(method='pearson')
+        pearson_path = os.path.join(self.dir_logistic_results, 'corr', '{}.csv'.format(self.cur_time))
+        corr_df.to_csv(pearson_path)
+        Logger.info('')
+        Logger.info('save pearson correlation df')
+        Logger.info('Save file path: - {}'.format(pearson_path))
 
-        import operator
-        sort_corr_val = sorted(pair_feature_corr.items(), key=operator.itemgetter(1))
-        sort_corr_val.reverse()
+    def save_predefined_data_set(self):
+        predefined_df_path = os.path.join(self.dir_logistic_results, 'pre_defined_df')
+        if not os.path.exists(predefined_df_path):
+            os.makedirs(predefined_df_path)
 
-        dict_already_seen = dict()        # prevent duplicate of feature correlation a_b, b_a
+        predefined_df_path = os.path.join(predefined_df_path, 'shape={}_{}_time=_{}.csv'.format(
+            self.merge_df.shape[0],
+            self.merge_df.shape[1],
+            self.cur_time
+        ))
+        self.merge_df.to_csv(predefined_df_path, index=False)
+        Logger.info('save pre-defined data set shape: {}'.format(self.merge_df.shape))
 
-        for idx, corr_obj in enumerate(sort_corr_val):
-            feature_a = corr_obj[0][0]
-            feature_b = corr_obj[0][1]
-            pearson_val = corr_obj[1]
-            if pearson_val < 1:
-
-                if pearson_val < self.threshold_pearson:
-                    continue
-
-                # check already seen
-                if feature_a in dict_already_seen and dict_already_seen[feature_a] == feature_b:
-                    continue
-                if feature_b in dict_already_seen and dict_already_seen[feature_b] == feature_a:
-                    continue
-
-                # check if in same group
-
-                if feature_a in self.time_purchase_meta_feature and feature_b in self.time_purchase_meta_feature:
-                    continue
-                if feature_a in self.time_purchase_ratio_feature and feature_b in self.time_purchase_ratio_feature:
-                    continue
-                if feature_a in self.vertical_ratio_feature and feature_b in self.vertical_ratio_feature:
-                    continue
-                if feature_a in self.purchase_price_feature and feature_b in self.purchase_price_feature:
-                    continue
-                if feature_a in self.purchase_percentile_feature and feature_b in self.purchase_percentile_feature:
-                    continue
-                if feature_a in self.user_meta_feature and feature_b in self.user_meta_feature:
-                    continue
-
-                logging.info(str(pearson_val) + ' (pearson v.) ' + str(feature_a) + ' vs. ' + str(feature_b))
-                dict_already_seen[feature_a] = feature_b
-
-                self.merge_df.plot.scatter(x=feature_a, y=feature_b, figsize=(9, 7))
-
-                z = np.polyfit(self.merge_df[feature_a], self.merge_df[feature_b], 1)
-                p = np.poly1d(z)
-                plt.plot(self.merge_df[feature_a], p(self.merge_df[feature_a]), "r", linewidth=0.5, alpha=0.5)
-
-                plt.title(feature_a + ' vs. ' + feature_b + ', pearson corr = ' + str(round(pearson_val, 2)))
-
-                plot_name = dir_analyze_name + 'pearson_corr/' + str(round(pearson_val, 2)) + ' pearson,  ' + str(feature_a) + ' vs. ' + str(feature_b) + '.png'
-
-                plt.savefig(plot_name, bbox_inches='tight')
-
-                # plt.show()
-                plt.close()
-        return
-
-    def calculate_pearson_correlation(self, relevant_X_columns, y_feature, df):
-
-        # for idx, y_feature in enumerate(self.lr_y_feature):  # iterate each trait
-        pearson_f = relevant_X_columns + self.lr_y_feature     # feature using in calculate pearson
-        self.corr_df = self.merge_df[pearson_f]
-        corr_df = self.corr_df.corr(method='pearson')
-        corr_df.to_csv(self.dir_analyze_name + 'corr_df.csv')
-        logging.info('')
-        logging.info('save pearson correlation df')
-        logging.info('Save file: self.corr_df - ' + str(self.dir_analyze_name) + 'corr_df.csv')
-        print(corr_df)
-        return
+    def load_predefined_data_set(self, predefined_path):
+        self.merge_df = pd.read_csv(predefined_path)
+        Logger.info('load pre-defined data set shape: {}'.format(self.merge_df.shape))
 
     # calculate logistic regression model
     def calculate_logistic_regression(self):
 
         # self.map_dict_percentile_group = dict(zip(self.lr_y_logistic_feature,  self.trait_percentile))
 
-        # contain test results data for all the iterations
-        true_list = list()
-        false_list = list()
-        test_score = list()
-        train_score_check = list()
-        test_score_check = list()
+        self.models_results = list()     # contain all results for the 5 traits models
 
         # test score for each trait
-        openness_score = list()
-        conscientiousness_score = list()
-        extraversion_score = list()
-        agreeableness_score = list()
-        neuroticism_score = list()
+        openness_score, conscientiousness_score, extraversion_score, agreeableness_score, neuroticism_score = \
+            list(), list(), list(), list(), list()
+        openness_score_cv, conscientiousness_score_cv, extraversion_score_cv, agreeableness_score_cv, neuroticism_score_cv = \
+            list(), list(), list(), list(), list()
+        openness_score_roc, conscientiousness_score_roc, extraversion_score_roc, agreeableness_score_roc, neuroticism_score_roc = \
+            list(), list(), list(), list(), list()
 
-        # train cv score for each trait
-        openness_score_cv = list()
-        conscientiousness_score_cv = list()
-        extraversion_score_cv = list()
-        agreeableness_score_cv = list()
-        neuroticism_score_cv = list()
-
-        # ROC test score for each trait
-        openness_score_roc = list()
-        conscientiousness_score_roc = list()
-        extraversion_score_roc = list()
-        agreeableness_score_roc = list()
-        neuroticism_score_roc = list()
-
-        import copy
         relevant_X_columns = copy.deepcopy(self.lr_x_feature)
         map_dict_feature_non_zero = dict()
         for trait in self.lr_y_logistic_feature:
@@ -1013,262 +847,144 @@ class CalculateScore:
         # add column H/L for each trait
         self.add_high_low_traits_column()
 
-        from sklearn import linear_model
-        from sklearn import model_selection
-        from sklearn.model_selection import train_test_split
-        from sklearn.metrics import roc_auc_score, roc_curve, auc
-        from sklearn.feature_selection import SelectKBest
+        # create model all target features
 
-        for i in range(0, 1):  # iterate N iterations
-            for idx, y_feature in enumerate(self.lr_y_logistic_feature):    # build model for each trait separately
-                logging.info('')
-                logging.info('build lr model for: ' + str(y_feature))
+        # self.calculate_pearson_correlation()
 
-                self.split_bool = False
+        for idx, y_feature in enumerate(self.lr_y_logistic_feature):    # build model for each trait separately
 
-                # create gap (throw near median results)
-                if self.bool_slice_gap_percentile:
-                    cur_f = self.map_dict_percentile_group[y_feature]
-                    self.merge_df.to_csv(self.dir_analyze_name + 'logistic_regression_merge_df.csv')
+            Logger.info('')
+            Logger.info('build model for: {}'.format(str(y_feature)))
 
-                    '''
-                    # distribution of percentile users
-                    data = self.merge_df[cur_f].tolist()
-                    plt.hist(data, bins=20, alpha=0.5)
-                    plt.title(str(cur_f))
-                    plt.xlabel('percentile')
-                    plt.ylabel('amount')
+            X, y = self._prepare_raw_data_to_model(y_feature, relevant_X_columns)
 
-                    plt.show()
-                    
-                    print(y_feature)
-                    print(self.threshold_purchase)
-                    print(self.merge_df.shape[0])
-                    print('80: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.8].shape[0]))
-                    print('70: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.7].shape[0]))
-                    print('60: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.6].shape[0]))
+            # whether to use cross validation or just train-test
+            X_train, X_test, y_train, y_test = self._split_data(X, y)
+            majority_ratio = max(round(sum(y) / len(y), 2), 1 - round(sum(y) / len(y), 2))
+            data_size = X.shape[0]
 
-                    print('40: ' + str(self.merge_df.loc[self.merge_df[cur_f] <= 0.4].shape[0]))
-                    print('30: ' + str(self.merge_df.loc[self.merge_df[cur_f] <= 0.3].shape[0]))
-                    print('20: ' + str(self.merge_df.loc[self.merge_df[cur_f] <= 0.2].shape[0]))
+            assert self.k_best_feature_flag
 
-                    print('80-20: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.8].shape[0] + self.merge_df.loc[self.merge_df[cur_f] <= 0.2].shape[0]))
-                    print('70-30: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.7].shape[0] + self.merge_df.loc[self.merge_df[cur_f] <= 0.3].shape[0]))
-                    print('60-40: ' + str(self.merge_df.loc[self.merge_df[cur_f] >= 0.6].shape[0] +  self.merge_df.loc[self.merge_df[cur_f] <= 0.4].shape[0]))
-                    continue
-                    '''
-                    h_df = self.merge_df.loc[self.merge_df[cur_f] >= self.h_limit]
-                    l_df = self.merge_df.loc[self.merge_df[cur_f] <= self.l_limit]
+            if self.k_best_feature_flag:
+                X, X_train, X_test, k_feature = self._select_k_best_feature(X, y, X_train, y_train, X_test)
 
-                    logging.info('H group amount: ' + str(h_df.shape[0]))
-                    logging.info('L group amount: ' + str(l_df.shape[0]))
-
-                    frames = [l_df, h_df]
-                    self.raw_df = pd.concat(frames)
-                else:
-                    self.raw_df = self.merge_df
-
-                self.raw_df = self.raw_df.fillna(0)
-                self.raw_df.to_csv(self.dir_analyze_name + 'lr_final_data.csv')
-                logging.info('')
-                logging.info('Save file: self.raw_df - ' + str(self.dir_analyze_name) + 'lr_final_data.csv')
-
-                import copy
-                relevant_X_columns = copy.deepcopy(self.lr_x_feature)
-                if y_feature in relevant_X_columns:
-                    relevant_X_columns.remove(y_feature)
-
-                self.raw_df = self.raw_df[relevant_X_columns + [y_feature]]
-
-                if self.bool_normalize_features:
-                    self.raw_df = self.preprocessing_min_max(self.raw_df)
-
-                X = self.raw_df[relevant_X_columns]
-                y = self.raw_df[y_feature]
-
-                if self.split_bool:
-                    X_train, X_test, y_train, y_test = train_test_split(
-                        X,
-                        y,
-                        stratify=y,
-                        test_size=self.test_fraction
-                    )
-                    logging.info('train: class 0 ratio: ' + str(sum(y_train) / len(y_train)))
-                    logging.info('test: class 0 ratio: ' + str(sum(y_test) / len(y_test)))
-                else:
-                    X_train = X
-                    y_train = y
-
-                logging.info('all: class 0 ratio:  ' + str(sum(y)/len(y)))
-
-                '''train_df, test_df = train_test_split(
-                    self.raw_df,
-                    test_size=self.test_fraction
+            if self.classifier_type == 'xgb':
+                regr = XGBClassifier(
+                    n_estimators=self.xgb_n_estimators,
+                    max_depth=self.xgb_max_depth,
+                    learning_rate=self.xgb_eta,
+                    gamma=self.xgb_c,
+                    subsample=self.xgb_subsample,
+                    colsample_bytree=self.xgb_colsample_bytree
                 )
+                # subsample=0.8, colsample_bytree=1, gamma=1)
 
-                X_train = train_df[relevant_X_columns]
-                y_train = train_df[y_feature]
-                X_test = test_df[relevant_X_columns]
-                y_test = test_df[y_feature]
-                '''
+                kfold = StratifiedKFold(n_splits=4, random_state=7)
+                acc_arr = cross_val_score(regr, X, y, cv=kfold)
+                auc_arr = cross_val_score(regr, X, y, cv=kfold, scoring='roc_auc')
 
-                X_train_old = copy.deepcopy(X_train)
-                y_train_old = copy.deepcopy(y_train)
-                from sklearn.feature_selection import f_classif
-                X_train.to_csv(self.dir_analyze_name + 'X_train_check.csv')
-                # X_test.to_csv(self.dir_analyze_name + 'X_test_check.csv')
-                k_model = SelectKBest(f_classif, k=self.k_best).fit(X_train, y_train)
+                acc_mean, acc_std = round(acc_arr.mean(), 2), round(acc_arr.std(), 2)
+                auc_mean, auc_std = round(auc_arr.mean(), 2), round(auc_arr.std(), 2)
 
-                idxs_selected = k_model.get_support(indices=True)
-                k_feature = list()
-                # features_dataframe_new = X_train[idxs_selected]
-                for idx, cur_feature in enumerate(X):
-                    if idx in idxs_selected:
-                        k_feature.append(cur_feature)
+                # extract feature importance
+                regr.fit(X, y)
+                dict_importance = dict(zip(k_feature, regr.feature_importances_))
+                dict_param = self._log_parameters_order(dict_importance)
 
-                X_train = k_model.transform(X_train)
+                Logger.info("")
+                Logger.info('Accuracy: {}'.format(round(acc_mean, 2)))
+                Logger.info('AUC: {}'.format(str(round(auc_mean, 2))))
+                Logger.info('Accuracy list: {}'.format(acc_arr))
+                Logger.info('AUC list: {}'.format(auc_arr))
+                Logger.info(regr)
+
+                # dict_param = dict(zip(k_feature, regr.feature_importances_))
+
+            elif self.classifier_type == 'lr':
 
                 if self.split_bool:
-                    X_test = k_model.transform(X_test)
-
-                    assert X_train.shape[1] == X_test.shape[1]
-
-                # X_train.to_csv(self.dir_analyze_name + 'logistic_regression_df.csv')
-                # y_train.to_csv(self.dir_analyze_name + 'logistic_regression_y_df.csv')
-
-                logging.info('Total sample size: ' + str(self.raw_df.shape[0]))
-                logging.info('Number of features before selecting: ' + str(self.raw_df.shape[1]))
-                logging.info('Number of k best features: ' + str(X_train.shape[1]))
-
-                # regr = linear_model.LogisticRegression(penalty=self.penalty, C=self.C)
-                regr = linear_model.LogisticRegressionCV(# Cs=1,
-                                                         penalty=self.penalty,
-                                                         solver='liblinear',
-                    cv=model_selection.StratifiedKFold(n_splits=4, shuffle=True, random_state=None))
-
-                '''cv=model_selection.StratifiedKFold(n_splits=4,shuffle=True,random_state=None))'''
-
-                regr.fit(X_train, y_train)
-                # train_score = regr.score(X_train, y_train)
-                if self.split_bool:
+                    Logger.info("implement logistic regression (without CV)")
+                    regr = linear_model.LogisticRegression(
+                        penalty=self.penalty,
+                        C=self.C,
+                        solver='liblinear'
+                    )
+                    regr.fit(X_train, y_train)
+                    train_score = regr.score(X_train, y_train)
                     test_score = regr.score(X_test, y_test)
                     prob_test_score = regr.predict_proba(X_test)
-                    y_1_prob = prob_test_score[:,1]
-                    roc_score = roc_auc_score(y_test, y_1_prob)     # macro roc score
+                    y_1_prob = prob_test_score[:, 1]
                     fpr, tpr, _ = roc_curve(y_test, y_1_prob)
                     auc_score = auc(fpr, tpr)
 
-                c_index = np.where(regr.Cs_ == regr.C_[0])[0][0]
-                train_score = sum(regr.scores_[1][:, c_index]) / 4  # num splits
+                    Logger.info("")
+                    Logger.info('train_score: {}'.format(round(train_score, 3)))
+                    Logger.info('test_score: {}'.format(round(test_score, 3)))
+                    Logger.info('auc score: {}'.format(str(round(auc_score, 3))))
 
-                # self.global_test += test_score
-                self.global_train_cv += train_score
-                self.global_counter += 1
+                    dict_param = dict(zip(k_feature, regr.coef_[0]))
+                    dict_param['intercept'] = regr.intercept_
 
-                if self.global_counter % 100 == 0:
-                    print('Counter: ' + str(self.global_counter))
-                    # print('Test Avg: ' + str(self.global_test/self.global_counter))
-                    print('Train Avg: ' + str(self.global_train_cv / self.global_counter))
+                else:
+                    Logger.info("implement CV logistic regression")
+                    regr = linear_model.LogisticRegressionCV(  # Cs=1,
+                        penalty=self.penalty,
+                        solver='liblinear',
+                        cv=model_selection.StratifiedKFold(n_splits=4, shuffle=True, random_state=None)
+                    )
+                    regr.fit(X_train, y_train)
+                    c_index = np.where(regr.Cs_ == regr.C_[0])[0][0]
+                    c = regr.C_[0], 3
+                    train_score = sum(regr.scores_[1][:, c_index]) / 4  # num splits
 
-                if self.split_bool:
-                    plt.figure()
-                    lw = 2
-                    plt.plot(fpr, tpr, color='darkorange',
-                             lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
-                    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-                    plt.xlim([0.0, 1.0])
-                    plt.ylim([0.0, 1.05])
-                    plt.xlabel('False Positive Rate')
-                    plt.ylabel('True Positive Rate')
-                    plt.title(str(y_feature) + ': test amount ' + str(X_test.shape[0]) + ', test prop ' + str(round(sum(y_test) / len(y_test),2)))
-                    plt.legend(loc="lower right")
+                    Logger.info("")     # TODO log k fold CV score
+                    Logger.info('CV score: ' + str(round(train_score, 3)))
+                    Logger.info('C value: ' + str(round(regr.C_[0], 3)))
 
-                    plot_name = str(round(auc_score, 2)) + '_ROC_k=' + str(self.k_best) + '_penalty=' + str(
-                        self.penalty) + '_gap=' + str(
-                        self.h_limit) + '_' + str(self.l_limit) + '_test_amount=' + \
-                                str(X_test.shape[0]) + '_threshold=' + str(self.threshold_purchase) + '_trait=' + str(y_feature) + '_max=' + str(round(auc_score, 2)) + '.png'
+                    dict_param = dict(zip(k_feature, regr.coef_[0]))
+                    dict_param['intercept'] = regr.intercept_[0]
 
-                    import os
-                    if not os.path.exists(self.plot_directory + '/roc/'):
-                        os.makedirs(self.plot_directory + '/roc/')
-
-                    plot_path = self.plot_directory + '/roc/' + plot_name
-                    plt.savefig(plot_path, bbox_inches='tight')
-
-                    plt.close()
-
-                logging.info("")
-                logging.info('train_score: ' + str(train_score))
-
-                if self.split_bool:
-                    logging.info('test_score: ' + str(test_score))
-                    logging.info('roc score: ' + str(roc_score))
-                    logging.info('auc score: ' + str(auc_score))
-                logging.info('C value: ' + str(regr.C_[0]))
-
-                dict_param = dict(zip(k_feature, regr.coef_[0]))
-                dict_param['intercept'] = regr.intercept_
-
-                d_view = [(v, k) for k, v in dict_param.iteritems()]
-                d_view.sort(reverse=True)  #
-
-                logging.info("")
-                logging.info("Model Parameters:")
-                # sorted(((v, k) for k, v in dict_param.iteritems()), reverse=True)
-                for v, k in d_view:
-                    if v != 0:
-                        logging.info("%s: %f" % (k, v))
-                logging.info("")
-
-                if self.split_bool:
-                    test_score_check.append(test_score)
-                train_score_check.append(train_score)
-
-                if not self.split_bool:
+                    # TODO: implement this
                     self.create_roc_cv_plt(X_train, y_train, regr.C_[0])
 
-                if self.split_bool:
-                    if y_feature == 'openness_group':
-                        openness_score.append(test_score)
-                        openness_score_roc.append(roc_score)
-                    if y_feature == 'conscientiousness_group':
-                        conscientiousness_score.append(test_score)
-                        conscientiousness_score_roc.append(roc_score)
-                    if y_feature == 'extraversion_group':
-                        extraversion_score.append(test_score)
-                        extraversion_score_roc.append(roc_score)
-                    if y_feature == 'agreeableness_group':
-                        agreeableness_score.append(test_score)
-                        agreeableness_score_roc.append(roc_score)
-                    if y_feature == 'neuroticism_group':
-                        neuroticism_score.append(test_score)
-                        neuroticism_score_roc.append(roc_score)
+            else:
+                raise ValueError('unknown classifier type - {}'.format(self.classifier_type))
 
+            # dict_param = self._log_parameters_order(dict_param)
+            # dict_param = {}
+            # insert current model to store later in a CSV
+            self._prepare_model_result(
+                y_feature, acc_mean, auc_mean, '', dict_param, data_size, majority_ratio, acc_arr, auc_arr, X
+            )
+
+            if self.classifier_type == 'lr' and self.split_bool:
                 if y_feature == 'openness_group':
-                    openness_score_cv.append(train_score)
+                    openness_score.append(acc_mean)
+                    openness_score_roc.append(auc_mean)
                 if y_feature == 'conscientiousness_group':
-                    conscientiousness_score_cv.append(train_score)
+                    conscientiousness_score.append(acc_mean)
+                    conscientiousness_score_roc.append(auc_mean)
                 if y_feature == 'extraversion_group':
-                    extraversion_score_cv.append(train_score)
+                    extraversion_score.append(acc_mean)
+                    extraversion_score_roc.append(auc_mean)
                 if y_feature == 'agreeableness_group':
-                    agreeableness_score_cv.append(train_score)
+                    agreeableness_score.append(acc_mean)
+                    agreeableness_score_roc.append(auc_mean)
                 if y_feature == 'neuroticism_group':
-                    neuroticism_score_cv.append(train_score)
+                    neuroticism_score.append(acc_mean)
+                    neuroticism_score_roc.append(auc_mean)
 
-                '''for idx, pair_prob in enumerate(regr.predict_proba(X_test)):
-                    true_label = list(y_test)[idx]
-                    max(pair_prob)
-                    if pair_prob[0] > pair_prob[1]:
-                        pred_label = 0
-                    else:
-                        pred_label = 1
+            if y_feature == 'openness_group':
+                openness_score_cv.append(acc_mean)
+            if y_feature == 'conscientiousness_group':
+                conscientiousness_score_cv.append(acc_mean)
+            if y_feature == 'extraversion_group':
+                extraversion_score_cv.append(acc_mean)
+            if y_feature == 'agreeableness_group':
+                agreeableness_score_cv.append(acc_mean)
+            if y_feature == 'neuroticism_group':
+                neuroticism_score_cv.append(acc_mean)
 
-                    if true_label == pred_label:
-                        # true_list.append(abs(0.5-pair_prob[pred_label]))
-                        true_list.append(pair_prob[pred_label])
-                    else:
-                        # false_list.append(abs(0.5-pair_prob[pred_label]))
-                        false_list.append(pair_prob[pred_label])'''
         if self.split_bool:
             if len(openness_score):
                 self.logistic_regression_accuracy['openness'] = (sum(openness_score) / len(openness_score))
@@ -1303,17 +1019,169 @@ class CalculateScore:
         if len(neuroticism_score_cv):
             self.logistic_regression_accuracy_cv['neuroticism'] = (sum(neuroticism_score_cv) / len(neuroticism_score_cv))
 
-        # from collections import Counter
+    def _prepare_model_result(self, y_feature, test_acc, auc_score, train_acc, features, data_size,
+                              majority_ratio, acc_arr, auc_arr, X):
 
-        # logging.info('Counter C: ' + str(Counter(c_check)))
+        self.models_results.append({
+            'method': bfi_config.predict_trait_configs['model_method'],
+            'classifier': self.classifier_type,
+            'CV_bool': 'False' if self.split_bool else 'True',
+            'user_type': self.user_type,
+            'l_limit': self.l_limit,
+            'h_limit': self.h_limit,
+            'threshold': self.threshold_purchase,
+            'k_features': X.shape[1] if self.k_best_feature_flag else self.k_best,
+            'xgb_gamma': self.xgb_c,
+            'xgb_eta': self.xgb_eta,
+            'xgb_max_depth': self.xgb_max_depth,
+            'trait': y_feature.split('_')[0],
+            'test_accuracy': test_acc,
+            'auc': auc_score,
+            'accuracy_k_fold': acc_arr,
+            'auc_k_fold': auc_arr,
+            'train_accuracy': train_acc,
+            'data_size': data_size,
+            'majority_ratio': majority_ratio,
+            'features': features,
+            'xgb_n_estimators': self.xgb_n_estimators,
+            'xgb_subsample': self.xgb_subsample,
+            'xgb_colsample_bytree': self.xgb_colsample_bytree
+        })
 
-        '''print(true_list)
-        print(len(true_list))
-        print(false_list)
-        print(len(false_list))'''
+    def _prepare_raw_data_to_model(self, y_feature, relevant_X_columns):
+        """
+        for a given target trait, prepare data set before insert into the model.
+            1. slice data above/below percentile threshold
+            2. normalize features
+        """
 
-        # print('total ratio: ' + str(float(len(true_list))/float(len(true_list)+len(false_list))))
-        return
+        if self.bool_slice_gap_percentile:
+            cur_f = self.map_dict_percentile_group[y_feature]
+            self.merge_df.to_csv('{}logistic_regression_merge_df.csv'.format(self.dir_analyze_name))
+
+            h_df = self.merge_df.loc[self.merge_df[cur_f] >= self.h_limit]
+            l_df = self.merge_df.loc[self.merge_df[cur_f] <= self.l_limit]
+
+            Logger.info('H group amount: ' + str(h_df.shape[0]))
+            Logger.info('L group amount: ' + str(l_df.shape[0]))
+
+            frames = [l_df, h_df]
+            self.raw_df = pd.concat(frames)
+        else:
+            self.raw_df = self.merge_df
+
+        self.raw_df = self.raw_df.fillna(0)
+        self.raw_df.to_csv('{}lr_final_data.csv'.format(self.dir_analyze_name))
+
+        Logger.info('')
+        Logger.info('Save file: self.raw_df - {} lr_final_data.csv'.format(str(self.dir_analyze_name)))
+
+        relevant_X_columns = copy.deepcopy(self.lr_x_feature)
+        if y_feature in relevant_X_columns:
+            relevant_X_columns.remove(y_feature)
+
+        self.raw_df = self.raw_df[relevant_X_columns + [y_feature]]
+
+        if self.bool_normalize_features:
+            self.raw_df = self.preprocessing_min_max(self.raw_df)
+
+        X = self.raw_df[list(set(relevant_X_columns) & set(list(self.raw_df)))]
+        y = self.raw_df[y_feature]
+
+        return X, y
+
+    def _split_data(self, X, y):
+        """
+        split data-set into train and test sets according to split bool
+        """
+        Logger.info('all: class 0 ratio: {}'.format(str(round(sum(y) / len(y), 2))))
+
+        if self.split_bool:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X,
+                y,
+                stratify=y,
+                test_size=self.test_fraction
+            )
+            Logger.info('train: class 0 ratio: {}'.format(str(round(sum(y_train) / len(y_train), 2))))
+            Logger.info('test: class 0 ratio: {}'.format(str(round(sum(y_test) / len(y_test), 2))))
+        else:
+            X_train, y_train = X, y
+            X_test, y_test = None, None
+
+        return X_train, X_test, y_train, y_test
+
+    def _select_k_best_feature(self, X, y, X_train, y_train, X_test):
+        """
+        select K-best feature and transform feature set to k-feature.
+        """
+        k_model = SelectKBest(f_classif, k=self.k_best).fit(X_train, y_train)
+
+        idxs_selected = k_model.get_support(indices=True)
+        k_feature = list()
+
+        for idx, cur_feature in enumerate(X):
+            if idx in idxs_selected:
+                k_feature.append(cur_feature)
+
+        X_train = k_model.transform(X_train)
+        X = k_model.transform(X)
+
+        if self.split_bool:
+            X_test = k_model.transform(X_test)
+
+            assert X_train.shape[1] == X_test.shape[1]
+
+        Logger.info('Total sample size: {}'.format(self.raw_df.shape[0]))
+        Logger.info('Number of features before selecting: {}'.format(self.raw_df.shape[1]))
+        Logger.info('Number of k best features: {}'.format(X_train.shape[1]))
+        Logger.info('K feature selected: {}'.format(', '.join(k_feature)))
+
+        return X, X_train, X_test, k_feature
+
+    def _log_parameters_order(self, dict_param):
+        """
+
+        :param dict_param: key=feature val=coefficients/importance
+        :return:
+        """
+        d_view = [(round(v, 2), k) for k, v in dict_param.iteritems()]
+        d_view.sort(reverse=True)
+
+        Logger.info("")
+        Logger.info("Model Parameters:")
+
+        for v, k in d_view:
+            if v != 0:
+                Logger.info("{}: {}".format(k, round(v, 3)))
+        Logger.info("")
+        return d_view
+
+    def _create_auc_plot(self, fpr, tpr, auc_score, X_test, y_test, y_feature):
+        plt.figure()
+        lw = 2
+        plt.plot(fpr, tpr, color='darkorange', lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
+        plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(str(y_feature) + ': test amount ' + str(X_test.shape[0]) + ', test prop ' + str(
+            round(sum(y_test) / len(y_test), 2)))
+        plt.legend(loc="lower right")
+
+        plot_name = str(round(auc_score, 2)) + '_ROC_k=' + str(self.k_best) + '_penalty=' + str(
+            self.penalty) + '_gap=' + str(
+            self.h_limit) + '_' + str(self.l_limit) + '_test_amount=' + \
+                    str(X_test.shape[0]) + '_threshold=' + str(self.threshold_purchase) + '_trait=' + str(
+            y_feature) + '_max=' + str(round(auc_score, 2)) + '.png'
+
+        if not os.path.exists(self.plot_directory + '/roc/'):
+            os.makedirs(self.plot_directory + '/roc/')
+
+        plot_path = self.plot_directory + '/roc/' + plot_name
+        plt.savefig(plot_path, bbox_inches='tight')
+        plt.close()
 
     # calculate linear regression regression model
     def calculate_linear_regression(self):
@@ -1363,13 +1231,13 @@ class CalculateScore:
 
         for i in range(0, 1):  # iterate N iterations
             for idx, y_feature in enumerate(self.lr_y_feature):    # iterate each trait
-                logging.info('')
-                logging.info('build linear regression model for: ' + str(y_feature))
+                Logger.info('')
+                Logger.info('build linear regression model for: ' + str(y_feature))
 
                 self.raw_df = self.merge_df
                 self.raw_df.to_csv(self.dir_analyze_name + 'linear_regression_final_data.csv')
-                logging.info('')
-                logging.info('save file: ')
+                Logger.info('')
+                Logger.info('save file: ')
 
                 import copy
                 relevant_X_columns = copy.deepcopy(self.lr_x_feature)
@@ -1396,13 +1264,13 @@ class CalculateScore:
                         y,
                         test_size=self.test_fraction
                     )
-                    logging.info('train: class 0 ratio: ' + str(sum(y_train) / len(y_train)))
-                    logging.info('test: class 0 ratio: ' + str(sum(y_test) / len(y_test)))
+                    Logger.info('train: class 0 ratio: ' + str(sum(y_train) / len(y_train)))
+                    Logger.info('test: class 0 ratio: ' + str(sum(y_test) / len(y_test)))
                 else:
                     X_train = X
                     y_train = y
 
-                logging.info('all: class 0 ratio:  ' + str(sum(y)/len(y)))
+                Logger.info('all: class 0 ratio:  ' + str(sum(y)/len(y)))
 
                 '''train_df, test_df = train_test_split(
                     self.raw_df,
@@ -1438,10 +1306,10 @@ class CalculateScore:
 
                 # X_train.to_csv(self.dir_analyze_name + 'logistic_regression_df.csv')
                 # y_train.to_csv(self.dir_analyze_name + 'logistic_regression_y_df.csv')
-                logging.info('')
-                logging.info('Total sample size: ' + str(self.raw_df.shape[0]))
-                logging.info('Number of features before selecting: ' + str(self.raw_df.shape[1]))
-                logging.info('Number of k best features: ' + str(X_train.shape[1]))
+                Logger.info('')
+                Logger.info('Total sample size: ' + str(self.raw_df.shape[0]))
+                Logger.info('Number of features before selecting: ' + str(self.raw_df.shape[1]))
+                Logger.info('Number of k best features: ' + str(X_train.shape[1]))
 
                 from sklearn import datasets, linear_model
                 from sklearn.model_selection import cross_validate
@@ -1487,14 +1355,14 @@ class CalculateScore:
 
                     mae_threshold = mean_absolute_error(y_test, [y_train.mean()] * len(y_test))
 
-                    logging.info('')
-                    logging.info('MAE train: ' + str(mae_train))
-                    logging.info('MAE test: ' + str(mae_test))
-                    logging.info('MAE threshold: ' + str(mae_threshold))
+                    Logger.info('')
+                    Logger.info('MAE train: ' + str(mae_train))
+                    Logger.info('MAE test: ' + str(mae_test))
+                    Logger.info('MAE threshold: ' + str(mae_threshold))
 
-                    logging.info('Pearson train: ' + str(round(pearson_c_train, 2)) + ', p val: ' + str(round(p_value_train, 3)))
-                    logging.info('Pearson test: ' + str(round(pearson_c_test, 2)) + ', p val: ' + str(round(p_value_test, 3)))
-                    logging.info('')
+                    Logger.info('Pearson train: ' + str(round(pearson_c_train, 2)) + ', p val: ' + str(round(p_value_train, 3)))
+                    Logger.info('Pearson test: ' + str(round(pearson_c_test, 2)) + ', p val: ' + str(round(p_value_test, 3)))
+                    Logger.info('')
 
                     min_s = min(min(y_pred_test), min(y_pred_train), min(y_test), min(y_train))
                     max_s = max(max(y_pred_test), max(y_pred_train), max(y_test), max(y_train))
@@ -1543,13 +1411,13 @@ class CalculateScore:
                 d_view = [(v, k) for k, v in dict_param.iteritems()]
                 d_view.sort(reverse=True)  #
 
-                logging.info("")
-                logging.info("Model Parameters:")
+                Logger.info("")
+                Logger.info("Model Parameters:")
                 # sorted(((v, k) for k, v in dict_param.iteritems()), reverse=True)
                 for v, k in d_view:
                     if v != 0:
-                        logging.info("%s: %f" % (k, v))
-                logging.info("")
+                        Logger.info("%s: %f" % (k, v))
+                Logger.info("")
 
                 if self.split_bool:
                     if y_feature == 'openness_trait':
@@ -1615,7 +1483,7 @@ class CalculateScore:
 
         # from collections import Counter
 
-        # logging.info('Counter C: ' + str(Counter(c_check)))
+        # Logger.info('Counter C: ' + str(Counter(c_check)))
 
         '''print(true_list)
         print(len(true_list))
@@ -1751,10 +1619,9 @@ class CalculateScore:
             np.where(self.merge_df['neuroticism_percentile'] >= 0.5, 1, 0)
 
         self.merge_df.to_csv(self.dir_analyze_name + 'logistic_regression_df.csv')
-        logging.info('')
-        logging.info('add High/Low traits group')
-        logging.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'logistic_regression_df.csv')
-        return
+        Logger.info('')
+        Logger.info('add High/Low traits group')
+        Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'logistic_regression_df.csv')
 
     # normalized each column seperatly between zero to one
     def preprocessing_min_max(self, df):
@@ -1762,12 +1629,19 @@ class CalculateScore:
         from sklearn import preprocessing
         norm_method = 'min_max'
 
+        # remove constant column
+        old_df_features = list(df)
+        df = df.loc[:, df.apply(pd.Series.nunique) != 1]
+        Logger.info('removed constant features: {}'.format(
+            list(set(df) - set(old_df_features)))
+        )
+
         if norm_method == 'min_max':
             normalized_df = (df - df.min()) / (df.max() - df.min())
         elif norm_method == 'mean_normalization':
             normalized_df = (df-df.mean())/df.std()
         else:
-            raise('undefined norm method')
+            raise ValueError('undefined norm method')
 
         # normalized_df.to_csv(self.dir_analyze_name + 'norm_df.csv')
         return normalized_df
@@ -1786,11 +1660,9 @@ class CalculateScore:
             start_str_cur = str(cur_rcol) + '.'
             filter_col = [col for col in self.participant_df if col.startswith(start_str_cur)][0]
             # print(filter_col)
-            logging.info('Change column values (reverse mode): ' + str(filter_col))
+            Logger.info('Change column values (reverse mode): ' + str(filter_col))
             self.participant_df[filter_col] = self.participant_df[filter_col].apply(lambda x: 6 - x)
         return
-
-
 
     def cal_participant_percentile_traits_values(self):
         # add empty columns
@@ -1810,7 +1682,7 @@ class CalculateScore:
 
         # add percentile traits columns
         for (idx, row_participant) in self.merge_df.iterrows():
-            # logging.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
+            # Logger.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
             self._cal_participant_traits_percentile_values(idx, row_participant)
 
         # self.merge_df = self.participant_df.copy()
@@ -1820,7 +1692,7 @@ class CalculateScore:
     # after delete un valid participant
     def cal_all_participant_percentile_value(self):
         for (idx, row_participant) in self.participant_df.iterrows():
-            logging.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
+            Logger.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
             self._cal_participant_traits_percentile_values(idx, row_participant)
 
             # after calculate traits score+percentile extract only relevant features
@@ -1832,8 +1704,6 @@ class CalculateScore:
 
         # self.merge_df = self.merge_df[remain_feature_list].copy()
         return
-
-
 
     # calculate average traits value
     def cal_participant_traits(self, row, cur_trait_list, ratio):
@@ -1853,7 +1723,6 @@ def main(participant_file, item_aspects_file, purchase_history_file, valid_users
                                    dir_analyze_name, threshold_purchase, bool_slice_gap_percentile,
                                    bool_normalize_features, c_value, regularization)    # create object and variables
 
-    calculate_obj.init_debug_log()                      # init log file
     calculate_obj.load_clean_csv_results()              # load data set
     calculate_obj.clean_df()                            # clean df - e.g. remain valid users only
     calculate_obj.create_feature_list()                 # create x_feature (structure only)
@@ -1868,7 +1737,7 @@ def main(participant_file, item_aspects_file, purchase_history_file, valid_users
     calculate_obj.insert_time_feature()                 # add time purchase feature
 
     # calculate_obj.textual_feature()                       # TODO even basic feature
-    calculate_obj.extract_item_aspect()                   # TODO add
+    calculate_obj.extract_item_aspect()                     # TODO add
     # calculate_obj.cal_all_participant_percentile_value()  # TODO need to add
 
     calculate_obj.calculate_logistic_regression()       # predict traits H or L
@@ -1878,20 +1747,5 @@ def main(participant_file, item_aspects_file, purchase_history_file, valid_users
 
 if __name__ == '__main__':
 
-    raise('not in use - please run using Wrapper_build_feature_dataset')
-    '''
-    # input file name
-    participant_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_139_participant.csv'
-    item_aspects_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_item_aspects.csv'
-    purchase_history_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_purchase_history.csv'
-    valid_users_file = '/Users/sguyelad/PycharmProjects/research/analyze_data/personality_valid_users.csv'
-    dir_analyze_name = '/Users/sguyelad/PycharmProjects/research/BFI_results/analyze_pic/'
-    threshold_purchase = 30
-    c_value = 2
-    regularization = 'l1'  # 'l2'
-    bool_slice_gap_percentile = True
-    bool_normalize_features = True
+    raise SystemExit('not in use - please run using Wrapper_build_feature_dataset')
 
-    main(participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name,
-         threshold_purchase, bool_slice_gap_percentile, bool_normalize_features, c_value, regularization)
-    '''

@@ -48,6 +48,7 @@ class Summarization:
     # single document summarization (summary by sentence order in description with threshold condition)
     def single_document_summarization(self):
 
+        removed_sentences_above_threshold = list()
         Logger.info('')
         Logger.info('start single document summarization')
         Logger.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))

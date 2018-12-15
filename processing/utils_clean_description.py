@@ -1,6 +1,8 @@
 # from __future__ import print_function
 import os
 import re
+
+import nltk
 import pandas as pd
 from time import gmtime, strftime
 from utils.logger import Logger
@@ -34,7 +36,7 @@ class CleanDescription:
         # main actions
         for idx, row in merge_df.iterrows():
             try:
-                if idx % 1000 == 0:
+                if idx % 500 == 0:
                     Logger.info('remove all non-english words: {} / {}'.format(str(idx), str(merge_df.shape[0])))
 
                 desc = row['description'].decode("utf8")
@@ -112,7 +114,7 @@ class CleanDescription:
 
         # change new line \n to . (easy to recognize later)
         line = ". ".join(line.split("\n"))
-        Logger.info('Replace HTML end of line with dot')
+        Logger.debug('Replace HTML end of line with dot')
 
         # split by camelCase
         for fragment in line.strip().split(' '):
@@ -124,7 +126,7 @@ class CleanDescription:
                 words.append(token)
         output = " ".join(words)
 
-        Logger.info('Split words in camelCase format')
+        Logger.debug('Split words in camelCase format')
 
         # split words concatenate with .:+ e.g.
         words = list()
@@ -137,6 +139,12 @@ class CleanDescription:
                 words.append(token)
         output = " ".join(words)
 
-        Logger.info('Split words concatenate with . , e.g.')
+        # remove very short sentences
+        import itertools
+        sentences = nltk.sent_tokenize(output)
+        list_sentences = [nltk.word_tokenize(sentence) for sentence in sentences if len(nltk.word_tokenize(sentence)) > 2]
+        words = list(itertools.chain.from_iterable(list_sentences))
+        output = " ".join(words)
+        Logger.debug('Split words concatenate with . , e.g.')
 
         return output

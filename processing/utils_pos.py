@@ -3,12 +3,12 @@ import numpy as np
 import os
 import nltk
 from time import gmtime, strftime
-import config
+import lexrank_config
 from utils.logger import Logger
 
-VALID_POS = config.POS['VALID_POS']                 # remain only this POS
-FILTER_POS_FLAG = config.POS['filter_pos_flag']     # extract only a specific POS tags (appears in the VALID_POS list)
-SAVE_POS = config.POS['save_pos']                   # save POS or words
+VALID_POS = lexrank_config.POS['VALID_POS']                 # remain only this POS
+FILTER_POS_FLAG = lexrank_config.POS['filter_pos_flag']     # extract only a specific POS tags (appears in the VALID_POS list)
+SAVE_POS = lexrank_config.POS['save_pos']                   # save POS or words
 
 
 class UtilsPOS:
@@ -28,7 +28,7 @@ class UtilsPOS:
         Logger.set_handlers('ConvertToPOS', log_file_name, level=level)
 
         Logger.info('start to convert description to POS tagging')
-        Logger.info('list of valid POS: ' + str(config.POS['VALID_POS']))
+        Logger.info('list of valid POS: ' + str(lexrank_config.POS['VALID_POS']))
         Logger.info('filter_pos_flag: ' + str(FILTER_POS_FLAG))
         Logger.info('save_pos: ' + str(SAVE_POS))
         Logger.info('df input path: ' + str(merge_df_path))

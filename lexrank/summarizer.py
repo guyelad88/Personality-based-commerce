@@ -144,7 +144,7 @@ class LexRank:
         # summarize using LexRank results
         self.description_summary_list = self.run_summary_algorithm()    # call Summarization class
 
-        return summary, sorted_ix, lex_scores, self.description_summary_list
+        return summary, sorted_ix, lex_scores, self.description_summary_list, self.discarded_sentences
 
     # body of algorithm
     def rank_sentences(
@@ -307,7 +307,7 @@ class LexRank:
             Logger.debug('')
             Logger.debug('similarity matrix (normalize to 1)')
             Logger.debug(similarity_matrix)
-            similarity_matrix = self.damping_factor * similarity_matrix     # multiple with damping factor
+            similarity_matrix = self.damping_factor * similarity_matrix     # SM: multiple with damping factor
 
             # jump matrix
             Logger.info('')
@@ -317,7 +317,7 @@ class LexRank:
             Logger.debug('jump matrix (normalize to 1)')
             Logger.debug(jump_matrix)
 
-            jump_matrix = (1-self.damping_factor)*jump_matrix               # multiple with damping factor
+            jump_matrix = (1-self.damping_factor)*jump_matrix               # PM: multiple with 1-damping factor
 
             # adjacency matrix
             Logger.info('')
@@ -338,8 +338,8 @@ class LexRank:
             similarity_matrix = self._markov_matrix(self.similarity_matrix_unnormalized)  # normalize matrix row to 1
             Logger.info('')
             Logger.info('similarity matrix (normalize to 1)')
-            Logger.info(similarity_matrix)
-            similarity_matrix = self.damping_factor * similarity_matrix  # multiple with damping factor
+            Logger.debug(similarity_matrix)
+            similarity_matrix = (1 - self.damping_factor) * similarity_matrix  # multiple with damping factor
 
             # jump matrix
             Logger.info('')
@@ -347,7 +347,7 @@ class LexRank:
             jump_matrix = self._calculate_jump_matrix(tf_scores)  # calculate jump matrix
             Logger.debug('jump matrix (normalize to 1)')
             Logger.debug(jump_matrix)
-            jump_matrix = (1 - self.damping_factor) * jump_matrix  # multiple with damping factor
+            jump_matrix = self.damping_factor * jump_matrix  # multiple with damping factor
 
             # adjacency matrix
             Logger.info('')
@@ -355,9 +355,9 @@ class LexRank:
             adjacency_matrix = similarity_matrix + jump_matrix
 
             Logger.info('')
-            Logger.info('finish building adjacency matrix - ' + str(1 - self.damping_factor) +
-                              ' * U + ' + str(self.damping_factor) + ' * SM')
-            Logger.info(adjacency_matrix)
+            Logger.info('finish building adjacency matrix - ' + str(self.damping_factor) +
+                              ' * U + ' + str(1 - self.damping_factor) + ' * SM')
+            Logger.debug(adjacency_matrix)
 
         return adjacency_matrix
 
@@ -624,13 +624,14 @@ class LexRank:
     def return_idf(self, word):
         if word not in self.idf_score:      # word does not appear in the corpus
             self.miss_idf += 1
-            cur_idf_score = 1  # TODO think for a good value to insert
+            cur_idf_score = 1               # TODO think for a good value to insert
         else:
             cur_idf_score = self.idf_score[word]
             self.hit_idf += 1
 
         if cur_idf_score < 1:
             cur_idf_score = 1
+
         return cur_idf_score
 
     # normalize similarity_matrix and return a markov matrix (each row sum to one)

@@ -6,11 +6,11 @@ import pandas as pd
 
 
 class CleanData:
-    '''
+    """
     remain only valid users
     check duplication
     remove according to threshold defined
-    '''
+    """
 
     def __init__(self, participant_file, valid_users_file, threshold, len_user_name_threshold, duplication_method,
                  dir_save_results):

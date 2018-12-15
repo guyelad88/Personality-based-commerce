@@ -17,8 +17,8 @@ pre_processing_configs = {
 
 # tune duplication validity and user name validity
 extract_big_five_inventory_score = {
-    'threshold': 0.8,                       # max diff in trait withing user with duplication
-    'name_length_threshold': 5              # min name length
+    'threshold': 0.15,                       # max diff in trait withing user with duplication
+    'name_length_threshold': 7              # min name length
 }
 
 # determine how to filter descriptions
@@ -103,10 +103,18 @@ test_lexrank = {
     'HTML_summary_size': 3,
     'threshold': 0.03,                              # min edge weight between two sentences - below remove the edge
 
-    # for vanilla-LexRank set damping factor to 0.8-0.9
-    'damping_factor': 0.2,                          # SM: probability not to jump
+    # for vanilla-LexRank set damping factor to 0.1-0.2
+    # for personality-based-LexRank set damping factor to 0.01-0.3 (SM: probability not to jump)
+    'damping_factor': 0.2,
 
-    'summarization_similarity_threshold': 0.4,      # remove from summarization if the similarity is above
+    'summarization_similarity_threshold': 0.55,      # remove from summarization if the similarity is above
+    'personality_trait_dict': {
+        # 'conscientiousness': 'L',
+        'extraversion': 'H',
+        'openness': 'H',
+    },
+    'lex_rank_algorithm_version': 'personality-based-LexRank',      # 'vanilla-LexRank', 'personality-based-LexRank'
+    'products_ids': ['B00WBJGUA2'],                                 # products id to create summary for them
 
     'corpus_size': 2000,            # 'max'/1000 - influence IDF - high number is leading to high computation time
 
@@ -120,10 +128,10 @@ test_lexrank = {
     'random_walk_flag': True,                        # flag if combine random jump between sentences
 
     'multi_document_summarization': 'single',                       # summarization method for single/multi documents
-    'lex_rank_algorithm_version': 'personality-based-LexRank',      # 'vanilla-LexRank', 'personality-based-LexRank'
+
     'summarization_version': 'top_relevant',                        # 'top_relevant', 'Bollegata', 'Shahaf'
 
-    'products_ids': ['B0192VWSSY'],                   # products id to create summary for them
+
 
     # current user personality - 'H'\'L'\'M' (high\low\miss(or mean)
     # TODO change it isn't the description we need to use
@@ -132,11 +140,9 @@ test_lexrank = {
     # 'target_item_description_file': '../data/amazon_description/size=435_min_size=10_time=2018-08-23 12:41:02.csv',  # amazon_949
 
     # clean descriptions
-    'target_item_description_file': '../data/amazon_description/experiment_input_clean_description.csv',
+    # 'target_item_description_file': '../data/amazon_description/experiment_input_clean_description.csv',
+    'target_item_description_file': '../data/amazon_description/experiment_input_clean_description.xlsx',
 
     'trait_relative_path_dict': '../results/data/kl/uni-gram regular 2018-08-21 21:04:59/all_words_contribute',
-    'personality_trait_dict': {
-        'extraversion': 'L',
-        'openness': 'H',
-    }
+
 }

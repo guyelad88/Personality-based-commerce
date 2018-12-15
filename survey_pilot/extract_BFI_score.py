@@ -2,7 +2,7 @@ from __future__ import print_function
 import pandas as pd
 import os
 import numpy as np
-import config
+import lexrank_config
 from time import gmtime, strftime
 from utils.logger import Logger
 
@@ -369,10 +369,14 @@ def main(participant_file, dir_save_results, threshold, name_length_threshold):
 if __name__ == '__main__':
 
     # input file name
-    participant_file = '../data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
+    # participant_file = '../data/participant_data/1425 users input/personality_participant_all_include_1287_CF total_1425.csv'
+
+    # 7.12
+    participant_file = '/Users/gelad/Personality-based-commerce/data/participant_data/29_8_1018/CF_Ebay _Technion_1665_users.csv'
+
     dir_save_results = '../results/data/BFI_results/'
 
-    threshold = config.extract_big_five_inventory_score['threshold']
-    name_length_threshold = config.extract_big_five_inventory_score['name_length_threshold']
+    threshold = lexrank_config.extract_big_five_inventory_score['threshold']
+    name_length_threshold = lexrank_config.extract_big_five_inventory_score['name_length_threshold']
 
     main(participant_file, dir_save_results, threshold, name_length_threshold)

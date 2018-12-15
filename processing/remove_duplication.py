@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 from time import gmtime, strftime
-import config
+import lexrank_config
 from utils.logger import Logger
 
 

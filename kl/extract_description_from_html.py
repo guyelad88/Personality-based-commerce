@@ -76,6 +76,9 @@ class ExtractDescriptions:
             # print(self.item_description_dict[item_id])
 
     def extract_words(self):
+        html_output_dir = "/Users/gelad/Desktop/html_example/{}/".format(self.cur_time)
+        if not os.path.exists(html_output_dir):
+            os.makedirs(html_output_dir)
 
         from bs4 import BeautifulSoup
         count_id = 0
@@ -84,18 +87,90 @@ class ExtractDescriptions:
             if item_id in ['332371767234', '152361715916']:
                 continue
 
+            # if item_id not in ['232690299503']:  # '292198425550']:
+            #     continue
+
             count_id += 1
 
             logging.info("Count: " + str(count_id) + ", Item id: " + str(item_id))
-            soup = BeautifulSoup(description_string)
+            # soup = BeautifulSoup(description_string)
 
+            soup = BeautifulSoup(description_string, 'html.parser')
+
+
+            """
+            print(soup.prettify())
+            print('')
+            print('')
+            print('')
+            print('')
+            print('')
+            """
+
+            # print('finish pretty')
+
+            # kill all script and style elements
+            # for script in soup(["script", "style"]):
+            #     script.extract()  # rip it out
+
+            result = list()
+            for tag in soup.findAll(True, {'id': True}):
+                result.append(tag['id'])
+
+            print('all id: {}'.format(result))
+            result = [x for x in result if 'desc' in x]
+            print('all id: {}'.format(result))
+
+            obj = list()
+            for id_name in result:
+                if soup.find_all(id=id_name) is not None:
+                    obj.extend(soup.find_all(id=id_name))
+
+            text_list = list()
+
+            for o in obj:
+                new_text = o.get_text()
+
+                for text in text_list:
+                    if new_text in text:
+                        continue
+                text_list.append(new_text)
+
+            final_text = '. '.join(text_list)
+            print('')
+            print('new method')
+            print(final_text)
+
+            soup = BeautifulSoup(description_string)
             # kill all script and style elements
             for script in soup(["script", "style"]):
                 script.extract()  # rip it out
-
-            # get text
             text = soup.get_text()
 
+            print('')
+            print('old method')
+            print(text)
+
+            if len(text) > 300:
+                print('item: {}, length {}'.format(item_id, len(text)))
+                soup = BeautifulSoup(description_string, 'html.parser')
+                print(soup.prettify())
+                beauty = u''.join(soup.prettify()).encode('utf-8').strip()
+                html_str = '<html>{}</html>'.format(beauty)
+
+                file_full_path = "{}{}_{}_{}.html".format(html_output_dir, len(text), count_id, item_id)
+                Html_file = open(file_full_path, "w")
+
+                print('save full path: {}'.format(file_full_path))
+
+                Html_file.write(html_str)
+                Html_file.close()
+            # get text
+            # text = soup.get_text()
+            if count_id > 1000:
+                raise()
+
+            continue
             # remove more HTML which remain after soup cleaning
             from HTMLParser import HTMLParser
 
@@ -168,7 +243,7 @@ if __name__ == '__main__':
 
     # input file name
     description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc.tsv'        # part 1
-    # description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'     # part 2
+    description_file = '/Users/gelad/Personality-based-commerce/data/descriptions_data/desc1.tsv'     # part 2
 
     log_dir = 'log/'
     directory_output = './results/descriptions_clean/'

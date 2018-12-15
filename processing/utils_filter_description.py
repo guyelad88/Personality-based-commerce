@@ -11,22 +11,22 @@ import matplotlib.pyplot as plt
 from time import gmtime, strftime
 from langdetect import detect_langs
 from utils.logger import Logger
-import config
+import lexrank_config
 
-MAX_LENGTH = config.filter_description['MAX_LENGTH']
-MIN_LENGTH = config.filter_description['MIN_LENGTH']
-DROP_NA = config.filter_description['DROP_NA']
-DROP_MIN = config.filter_description['DROP_MIN']
-DROP_MAX = config.filter_description['DROP_MAX']
-DROP_NON_ENGLISH = config.filter_description['DROP_NON_ENGLISH']
-DROP_NON_ENGLISH_WORDS = config.filter_description['DROP_NON_ENGLISH_WORDS']
-DROP_DUPLICATION = config.filter_description['DROP_DUPLICATION']
+MAX_LENGTH = lexrank_config.filter_description['MAX_LENGTH']
+MIN_LENGTH = lexrank_config.filter_description['MIN_LENGTH']
+DROP_NA = lexrank_config.filter_description['DROP_NA']
+DROP_MIN = lexrank_config.filter_description['DROP_MIN']
+DROP_MAX = lexrank_config.filter_description['DROP_MAX']
+DROP_NON_ENGLISH = lexrank_config.filter_description['DROP_NON_ENGLISH']
+DROP_NON_ENGLISH_WORDS = lexrank_config.filter_description['DROP_NON_ENGLISH_WORDS']
+DROP_DUPLICATION = lexrank_config.filter_description['DROP_DUPLICATION']
 
-REMOVE_UNINFORMATIVE_WORDS = config.filter_description['FLAG_UNINFORMATIVE_WORDS']
-UNINFORMATIVE_WORDS_BI_GRAM = config.filter_description['BI_GRAM_UNINFORMATIVE_WORDS']
-UNINFORMATIVE_WORDS = config.filter_description['UNINFORMATIVE_WORDS']
+REMOVE_UNINFORMATIVE_WORDS = lexrank_config.filter_description['FLAG_UNINFORMATIVE_WORDS']
+UNINFORMATIVE_WORDS_BI_GRAM = lexrank_config.filter_description['BI_GRAM_UNINFORMATIVE_WORDS']
+UNINFORMATIVE_WORDS = lexrank_config.filter_description['UNINFORMATIVE_WORDS']
 
-VERTICAL = config.filter_description['VERTICAL']
+VERTICAL = lexrank_config.filter_description['VERTICAL']
 
 
 class FilterDescription:
@@ -119,6 +119,21 @@ class FilterDescription:
 
                 desc = row['description'].decode("utf8")
 
+                # cut description from first occurrence of un informative words
+                s_i = desc.find('shipping') if desc.find('shipping') > -1 else np.inf
+                p_i = desc.find('payment') if desc.find('payment') > -1 else np.inf
+                pa_i = desc.find('paypal') if desc.find('paypal') > -1 else np.inf
+                d_i = desc.find('delivery') if desc.find('delivery') > -1 else np.inf
+                pl_i = desc.find('please') if desc.find('please') > -1 else np.inf
+                f_i = desc.find('feedback') if desc.find('feedback') > -1 else np.inf
+                c_i = desc.find('contract') if desc.find('contract') > -1 else np.inf
+
+                min_idx = min(s_i, p_i, pa_i, d_i, pl_i, f_i, c_i)
+
+                desc = desc[:min_idx] if min_idx < 10000 else desc
+
+                # TODO print the remove part
+
                 nltk.word_tokenize(''.join([i if ord(i) < 128 else ' ' for i in desc]))
 
                 if DROP_NON_ENGLISH:
@@ -132,7 +147,7 @@ class FilterDescription:
                 assert DROP_NON_ENGLISH_WORDS is True       # TODO: generalize this, here we clean the descriptions
                 if DROP_NON_ENGLISH_WORDS:
                     desc = FilterDescription._clean_description(desc)
-                    desc_english = [
+                    """desc_english = [
                         word.lower()
                         for word in desc
                         if word.lower() in valid_english_words
@@ -142,12 +157,12 @@ class FilterDescription:
                            or word[-2:] in ['ed', 'er']
                            or word[-3:] == ['ing', 'day', 'est', 'ear', 'ite']
                            or word[-4:] == 'able'
-                    ]
+                    ]"""
 
-                    """desc_english = [
+                    desc_english = [
                         word.lower()
                         for word in desc
-                    ]"""
+                    ]
 
                     """if detect_obj[0].lang == 'en':
                         for word in desc:

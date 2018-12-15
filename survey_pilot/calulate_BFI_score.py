@@ -1,7 +1,4 @@
 from __future__ import print_function
-import os
-import sys
-import argparse
 import pandas as pd
 import logging
 import numpy as np
@@ -9,7 +6,10 @@ import matplotlib.pyplot as plt
 
 
 class CalculateScore:
-
+    """
+    Calculate BFI score for given test answer, and send an email to user with his score.
+    Currently obsolete - this class has been used for motivate people to answer our survey.
+    """
     def __init__(self):
         self.df = pd.DataFrame()
 
@@ -271,7 +271,7 @@ class CalculateScore:
     # for each participant, send mail with his summary results
     def send_individual_mail(self):
 
-        raise('block send mail')
+        raise SystemExit('block send mail')
 
         for (idx, row_participant) in self.df.iterrows():
             logging.info('Participant: ' + str(row_participant['Username']))
@@ -528,7 +528,7 @@ class CalculateScore:
 def main(name):
     calculate_obj = CalculateScore()            # create object and variables
     calculate_obj.init_debug_log()              # init log file
-    calculate_obj.load_clean_csv_results()      # load dataset
+    calculate_obj.load_clean_csv_results()      # load data set
     calculate_obj.change_reverse_value()        # change specific column into reverse mode
     calculate_obj.calculate_average_score()     # calculate average score for the big five traits
     calculate_obj.calculate_all_scores()        #
@@ -536,8 +536,9 @@ def main(name):
     # to send an email response with results
     # calculate_obj.send_individual_mail()
 
+
 if __name__ == '__main__':
-    main('guy')
+    main()
 
 
 

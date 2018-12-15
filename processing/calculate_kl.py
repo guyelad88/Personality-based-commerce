@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy
 import pandas as pd
 import xlwt
+from openpyxl import Workbook, load_workbook
 import copy
 import operator
 import ntpath
@@ -17,28 +18,28 @@ from time import gmtime, strftime
 from sklearn.feature_extraction.text import CountVectorizer
 
 from utils.logger import Logger
-import config
+import lexrank_config
 
-TOP_K_WORDS = config.calculate_kl['TOP_K_WORDS']            # present top words (30)
-SMOOTHING_FACTOR = config.calculate_kl['SMOOTHING_FACTOR']  # smoothing factor for calculate term contribution (1.0)
-NGRAM_RANGE = config.calculate_kl['NGRAM_RANGE']
-VOCABULARY_METHOD = config.calculate_kl['VOCABULARY_METHOD']  # KL methods: aggregate all documents
+TOP_K_WORDS = lexrank_config.calculate_kl['TOP_K_WORDS']            # present top words (30)
+SMOOTHING_FACTOR = lexrank_config.calculate_kl['SMOOTHING_FACTOR']  # smoothing factor for calculate term contribution (1.0)
+NGRAM_RANGE = lexrank_config.calculate_kl['NGRAM_RANGE']
+VOCABULARY_METHOD = lexrank_config.calculate_kl['VOCABULARY_METHOD']  # KL methods: aggregate all documents
 
-CONTRIBUTE_TYPE = config.calculate_kl['CONTRIBUTE_TYPE']
-NORMALIZE_CONTRIBUTE_FLAG = config.calculate_kl['NORMALIZE_CONTRIBUTE']['flag']
-NORMALIZE_CONTRIBUTE_TYPE = config.calculate_kl['NORMALIZE_CONTRIBUTE']['type']         # TODO not in use
+CONTRIBUTE_TYPE = lexrank_config.calculate_kl['CONTRIBUTE_TYPE']
+NORMALIZE_CONTRIBUTE_FLAG = lexrank_config.calculate_kl['NORMALIZE_CONTRIBUTE']['flag']
+NORMALIZE_CONTRIBUTE_TYPE = lexrank_config.calculate_kl['NORMALIZE_CONTRIBUTE']['type']         # TODO not in use
 
-CLIP_DESCRIPTION = config.calculate_kl['CLIP_DESCRIPTION']
+CLIP_DESCRIPTION = lexrank_config.calculate_kl['CLIP_DESCRIPTION']
 
-FIND_WORD_DESCRIPTION_FLAG = config.calculate_kl['FIND_WORD_DESCRIPTION']['flag']
-FIND_WORD_DESCRIPTION_K = config.calculate_kl['FIND_WORD_DESCRIPTION']['k']             # TODO not in use
+FIND_WORD_DESCRIPTION_FLAG = lexrank_config.calculate_kl['FIND_WORD_DESCRIPTION']['flag']
+FIND_WORD_DESCRIPTION_K = lexrank_config.calculate_kl['FIND_WORD_DESCRIPTION']['k']             # TODO not in use
 
-KL_TYPE = config.calculate_kl['KL_TYPE']['type']                    # KL for pos or words
-KL_TARGET_COLUMN = config.calculate_kl['KL_TYPE']['column_name']    # target column name contains the descriptions
+KL_TYPE = lexrank_config.calculate_kl['KL_TYPE']['type']                    # KL for pos or words
+KL_TARGET_COLUMN = lexrank_config.calculate_kl['KL_TYPE']['column_name']    # target column name contains the descriptions
 
-PERSONALITY_TRAIT = config.personality_trait        # list of personality traits
+PERSONALITY_TRAIT = lexrank_config.personality_trait        # list of personality traits
 
-KL_CONFIGURATION_DICT = config.calculate_kl
+KL_CONFIGURATION_DICT = lexrank_config.calculate_kl
 RESULT_DIR = '../results/data/kl/'
 
 
