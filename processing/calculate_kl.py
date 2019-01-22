@@ -376,7 +376,7 @@ class CalculateKL:
 
     def calculate_kl_and_language_models_aggregation(self):
         """ calculate KL results (both), and most separate values """
-        self.calculate_kl()  # cal kl using sc ipy
+        self.calculate_kl()  # cal kl using scipy
 
         # cal most significant separate words - both direction
         self.calculate_separate_words_aggregation(self.X_dense[0].tolist()[0], self.X_dense[1].tolist()[0])

@@ -4,6 +4,10 @@ from utils.logger import Logger
 from time import gmtime, strftime
 import os
 import pandas as pd
+import sys
+
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 from config import bfi_config
 
@@ -86,6 +90,7 @@ class Wrapper:
         self.time_purchase_ratio_feature_flag = dict_feature_flag['time_purchase_ratio_feature_flag']
         self.time_purchase_meta_feature_flag = dict_feature_flag['time_purchase_meta_feature_flag']
         self.vertical_ratio_feature_flag = dict_feature_flag['vertical_ratio_feature_flag']
+        self.meta_category_feature_flag = dict_feature_flag['meta_category_feature_flag']
         self.purchase_percentile_feature_flag = dict_feature_flag['purchase_percentile_feature_flag']
         self.user_meta_feature_flag = dict_feature_flag['user_meta_feature_flag']
         self.aspect_feature_flag = dict_feature_flag['aspect_feature_flag']
@@ -138,7 +143,7 @@ class Wrapper:
 
         self.result_df = pd.DataFrame(columns=[
             'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit',
-            'threshold', 'k_features', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
+            'threshold', 'k_features', 'penalty', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
             'accuracy_k_fold', 'auc_k_fold', 'train_accuracy', 'data_size', 'majority_ratio', 'features',
             'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree'
         ])
@@ -271,11 +276,13 @@ class Wrapper:
 
                                 Logger.info('')
                                 Logger.info('')
-                                Logger.info('############################# run new configuration #############################')
+                                Logger.info('######################### run new configuration ########################')
                                 Logger.info('')
-                                Logger.info(
-                                    'Current configuration: Penalty: ' + str(cur_penalty) + ', Threshold: ' + str(threshold_purchase) + ', k_best: ' + str(k_best)
-                                )
+                                Logger.info('Current configuration: Penalty: {}, Threshold: {}, k_best: {}'.format(
+                                    cur_penalty,
+                                    threshold_purchase,
+                                    k_best
+                                ))
 
                                 calculate_obj = self.run_experiments(xgb_c, xgb_eta, xgb_max_depth)     # run configuration
 
@@ -300,8 +307,7 @@ class Wrapper:
 
                                 # CV score
                                 self.openness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['openness'])
-                                self.conscientiousness_cv_score_list.append(
-                                    calculate_obj.logistic_regression_accuracy_cv['conscientiousness'])
+                                self.conscientiousness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['conscientiousness'])
                                 self.extraversion_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['extraversion'])
                                 self.agreeableness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['agreeableness'])
                                 self.neuroticism_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['neuroticism'])
@@ -392,35 +398,47 @@ class Wrapper:
                                        dir_analyze_name, self.threshold_purchase, self.bool_slice_gap_percentile,
                                        self.bool_normalize_features, self.C, self.cur_penalty,
                                        self.time_purchase_ratio_feature_flag, self.time_purchase_meta_feature_flag,
-                                       self.vertical_ratio_feature_flag, self.purchase_percentile_feature_flag,
+                                       self.vertical_ratio_feature_flag, self.meta_category_feature_flag, self.purchase_percentile_feature_flag,
                                        self.user_meta_feature_flag, self.aspect_feature_flag, self.h_limit,
                                        self.l_limit, self.k_best, self.plot_directory, self.user_type,
                                        self.normalize_traits, self.classifier_type, self.split_bool, xgb_c, xgb_eta,
                                        xgb_max_depth, self.dir_logistic_results, self.cur_time, self.k_best_feature_flag)
 
+        # create data set
         if not self.predefined_data_set_flag:
-
+            Logger.info('Start creating data set')
             # calculate_obj.init_debug_log()  # init log file
             calculate_obj.load_clean_csv_results()                  # load data set
             calculate_obj.clean_df()                                # clean df - e.g. remain valid users only
-            calculate_obj.create_feature_list()                     # create x_feature
+            # calculate_obj.create_feature_list()                     # create x_feature
 
             calculate_obj.insert_gender_feature()                   # add gender feature
             calculate_obj.remove_except_cf()                        # remove not CF participants
             calculate_obj.extract_user_purchase_connection()        # insert purchase and vertical type to model
+            calculate_obj.insert_meta_category()                    # Add eBay meta categories features
+            calculate_obj.insert_titles_features()                  # add titles n-grams features
+            calculate_obj.insert_descriptions_features()            # add descriptions n-grams features
 
             if self.aspect_feature_flag:
-                calculate_obj.extract_item_aspect()                 # add features of dominant item aspect
+                calculate_obj.extract_item_aspect()                     # add features of dominant item aspect
+            else:
+                print('skip - item aspects does not inserted')
 
-            calculate_obj.normalize_personality_trait()             # normalize trait to 0-1 scale (div by 5)
+            calculate_obj.normalize_personality_trait()                 # normalize trait to 0-1 scale (div by 5)
 
             # important!! after cut users by threshold
-            calculate_obj.cal_participant_percentile_traits_values()  # calculate average traits and percentile value
+            calculate_obj.cal_participant_percentile_traits_values()    # calculate average traits and percentile value
 
-            calculate_obj.insert_money_feature()                    # add feature contain money issue
-            calculate_obj.insert_time_feature()                     # add time purchase feature
+            calculate_obj.insert_money_feature()                        # add feature contain money issue
+            calculate_obj.insert_time_feature()                         # add time purchase feature
             calculate_obj.save_predefined_data_set()
+
+            # moved here after we add textual features both titles and descriptions
+            calculate_obj.create_feature_list()  # create x_feature
+
+        # load pre-trained data set
         else:
+            Logger.info('load pre-trained data set')
             calculate_obj.create_feature_list()
             calculate_obj.load_predefined_data_set(self.predefined_data_set_path)
 
@@ -437,14 +455,6 @@ class Wrapper:
         """
         insert model result for a given configuration
         """
-        """
-        self.result_df = pd.DataFrame(columns=[
-            'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit',
-            'threshold', 'k_features', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
-            'accuracy_k_fold', 'auc_k_fold', 'train_accuracy', 'data_size', 'majority_ratio', 'features',
-            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree'
-        ])
-        """
         for row in model_results_array:
             self.result_df = self.result_df.append({
                 'method': row['method'],
@@ -457,6 +467,7 @@ class Wrapper:
                 # 'C': row['C'],
                 'threshold': row['threshold'],
                 'k_features': row['k_features'],
+                'penalty': row['penalty'],
                 'xgb_gamma': row['xgb_gamma'],
                 'xgb_eta': row['xgb_eta'],
                 'xgb_max_depth': row['xgb_max_depth'],
@@ -495,8 +506,12 @@ class Wrapper:
         n = round(max(self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']), 2)
         c = round(max(self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']), 2)
         best_acc = max(o, c, e, a, n)
-        prefix_name = '{}_e={}_o={}_a={}_c={}_n={}_cnt={}_user={}_h={}_l={}'.format(
-            best_acc, e, o, a, c, n, self.result_df.shape[0], self.user_type, self.h_limit, self.l_limit
+        num_splits = bfi_config.predict_trait_configs['num_splits']
+        title_features = bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag']
+        prefix_name = '{}_e={}_o={}_a={}_c={}_n={}_cnt={}_clf={}_user={}_split={}_title={}_h={}_l={}'.format(
+            best_acc, e, o, a, c, n,
+            self.result_df.shape[0], self.classifier_type, self.user_type, num_splits, title_features,
+            self.h_limit, self.l_limit
         )
 
         result_df_path = os.path.join(result_df_path, '{}_{}.csv'.format(prefix_name, self.cur_time))
@@ -809,6 +824,7 @@ def main():
     wrapper_obj = Wrapper()
     wrapper_obj.init_debug_log()        # init debug once - log file
     wrapper_obj.run_models()
+
 
 if __name__ == '__main__':
     main()

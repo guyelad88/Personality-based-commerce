@@ -132,11 +132,14 @@ class WrapperLexRank:
         if CORPUS_SIZE != 'max' and not isinstance(CORPUS_SIZE, int):
             raise ValueError('unknown corpus size variable')
 
-        if CORPUS_SIZE != 'max' and CORPUS_SIZE < 200:
+        if CORPUS_SIZE != 'max' and CORPUS_SIZE < 20:
             raise ValueError('too small corpus size')
 
-        if LEX_RANK_ALGORITHM_VERSION == 'vanilla-LexRank' and DAMPING_FACTOR > 0.2:
-            raise ValueError('for vanilla LexRank damping factor must be below 0.2')
+        if LEX_RANK_ALGORITHM_VERSION == 'vanilla-LexRank' and DAMPING_FACTOR not in [0.15, 0.25, 0.5]:
+            raise ValueError('for vanilla LexRank damping factor must be 0.15')
+
+        if LEX_RANK_ALGORITHM_VERSION == 'personality-based-LexRank' and DAMPING_FACTOR not in [0.01, 0.1, 0.2, 0.3]:
+            raise ValueError('for vanilla LexRank damping factor must be 0.15')
 
     # log class arguments
     def log_attribute_input(self):

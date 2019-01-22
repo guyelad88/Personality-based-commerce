@@ -16,6 +16,11 @@ from sklearn import linear_model, model_selection
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_extraction.text import CountVectorizer
+
+from eli5 import formatters, explain_weights_xgboost, explain_prediction_xgboost, show_weights
+from eli5.sklearn import explain_linear_classifier_weights
+from eli5 import sklearn
 
 
 class CalculateScore:
@@ -23,7 +28,8 @@ class CalculateScore:
     def __init__(self, participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name,
                  threshold_purchase, bool_slice_gap_percentile=True, bool_normalize_features=True, C=2,
                  cur_penalty='l1', time_purchase_ratio_feature_flag=True, time_purchase_meta_feature_flag=True,
-                 vertical_ratio_feature_flag=True, purchase_percentile_feature_flag=True,
+                 vertical_ratio_feature_flag=True, meta_category_feature_flag = True,
+                 purchase_percentile_feature_flag=True,
                  user_meta_feature_flag=True, aspect_feature_flag=True, h_limit=0.6, l_limit=0.4,
                  k_best=10, plot_directory='', user_type='all', normalize_traits=True, classifier_type='xgb',
                  split_bool=False, xgb_c=1, xgb_eta=0.1, xgb_max_depth=4, dir_logistic_results='', cur_time='',
@@ -78,7 +84,9 @@ class CalculateScore:
         self.user_name_id_dict = dict()     # missing data because it 1:N
         self.user_id_name_dict = dict()     #
 
-        self.models_results = list()        # store model result (later will insert into a result CSV)
+        self.models_results = list()            # store model result (later will insert into a result CSV)
+
+        self.textual_features_name = list()     # contain title features names
 
         # system hyper_parameter
         self.threshold_purchase = threshold_purchase    # throw below this number
@@ -92,7 +100,9 @@ class CalculateScore:
         self.l_limit = l_limit
 
         self.k_best_feature_flag = k_best_feature_flag
-        self.k_best = random.randint(8, 20)     # k_best  # number of k_best feature to select
+        self.k_rand_min, self.k_rand_max = \
+            bfi_config.predict_trait_configs['k_rand'][0], bfi_config.predict_trait_configs['k_rand'][1]
+        self.k_best = random.randint(self.k_rand_min, self.k_rand_max)     # number of k_best feature to select / 'all'
 
         self.plot_directory = plot_directory
         self.user_type = user_type                  # user type in model 'all'/'cf'/'ebay-tech'
@@ -112,6 +122,8 @@ class CalculateScore:
         self.xgb_colsample_bytree = bfi_config.predict_trait_configs['xgb_colsample_bytree']
         """
 
+        self.n_splits = bfi_config.predict_trait_configs['num_splits']
+
         self.pearson_relevant_feature = bfi_config.feature_data_set['pearson_relevant_feature']
 
         self.lr_y_feature = bfi_config.feature_data_set['lr_y_feature']
@@ -123,14 +135,18 @@ class CalculateScore:
         self.time_purchase_ratio_feature_flag = time_purchase_ratio_feature_flag
         self.time_purchase_meta_feature_flag = time_purchase_meta_feature_flag
         self.vertical_ratio_feature_flag = vertical_ratio_feature_flag
+        self.meta_category_feature_flag = meta_category_feature_flag
         self.purchase_price_feature_flag = False                        # if true is overlap with purchase percentile
         self.purchase_percentile_feature_flag = purchase_percentile_feature_flag
         self.user_meta_feature_flag = user_meta_feature_flag
         self.aspect_feature_flag = aspect_feature_flag
+        self.title_feature_flag = bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag']
+        self.descriptions_feature_flag = bfi_config.predict_trait_configs['dict_feature_flag']['descriptions_feature_flag']
 
         self.time_purchase_ratio_feature = bfi_config.feature_data_set['time_purchase_ratio_feature']
         self.time_purchase_meta_feature = bfi_config.feature_data_set['time_purchase_meta_feature']
         self.vertical_ratio_feature = bfi_config.feature_data_set['vertical_ratio_feature']
+        self.meta_category_feature = bfi_config.feature_data_set['meta_category_feature']
         self.purchase_price_feature = bfi_config.feature_data_set['purchase_price_feature']
         self.purchase_percentile_feature = bfi_config.feature_data_set['purchase_percentile_feature']
         self.user_meta_feature = bfi_config.feature_data_set['user_meta_feature']
@@ -225,6 +241,8 @@ class CalculateScore:
             self.lr_x_feature.extend(self.time_purchase_ratio_feature)
         if self.vertical_ratio_feature_flag:
             self.lr_x_feature.extend(self.vertical_ratio_feature)
+        if self.meta_category_feature_flag:
+            self.lr_x_feature.extend(self.meta_category_feature)
         if self.purchase_price_feature_flag:
             self.lr_x_feature.extend(self.purchase_price_feature)
         if self.purchase_percentile_feature_flag:
@@ -233,7 +251,10 @@ class CalculateScore:
             self.lr_x_feature.extend(self.user_meta_feature)
         if self.aspect_feature_flag:
             self.lr_x_feature.extend(self.aspect_feature)
-        return
+        if self.title_feature_flag:
+            self.lr_x_feature.extend(self.textual_features_name)
+        if self.descriptions_feature_flag:
+            self.lr_x_feature.extend(self.description_features_name)
 
     # extract user history purchase - amount
     # a. connect to number of purchases
@@ -248,7 +269,200 @@ class CalculateScore:
         Logger.info('')
         Logger.info('add user purchase connection')
         Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'merge_df.csv')
+
+    def insert_meta_category(self):
+        # Add eBay meta categories features
+        _num_row_before = self.merge_df.shape[0]
+
+        categ_df = pd.read_csv(
+            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/thresh=0_user_purchases_per_category.csv'
+        )
+        # m = pd.merge(self.merge_df, categ_df, left_on='eBay site user name', right_on='buyer_name')
+        self.merge_df = pd.merge(
+            self.merge_df,
+            categ_df,
+            left_on=['eBay site user name', 'number_purchase'],
+            right_on=['buyer_name', 'buyer_cnt']
+        )
+        assert _num_row_before == self.merge_df.shape[0]
         return
+
+    def no_number_preprocessor(self, tokens):
+        import re
+        r = re.sub('(\d)+', 'NUM', tokens.lower())
+        # This alternative just removes numbers:
+        # r = re.sub('(\d)+', '', tokens.lower())
+        return r
+
+    def insert_titles_features(self):
+        # add titles n-grams features
+        # load df of titles
+        if not self.title_feature_flag:
+            Logger.info('title features not in use')
+        else:
+            Logger.info('Start to extract title features...')
+
+        _df_t = pd.read_csv(
+            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/titles_corpus_710.csv',
+            usecols=['buyer_id', 'titles', 'cnt']
+        )
+        # TODO filter by user id/name and remain only relevant id's
+        _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
+        assert _df_t.shape[0] == self.merge_df.shape[0]
+        # normalized CountVectorizer by number of purchases
+        # defined diagonal matrix
+        cnt_vector = _df_t['cnt']
+        cnt_vector = [1 / float(x) for x in cnt_vector]
+        c = np.array(cnt_vector)
+        diag = np.diag(c)
+
+        # defined CountVectorizer properties
+        max_features = 2000
+
+        cv = CountVectorizer(
+            lowercase=True,
+            ngram_range=(1, 2),
+            min_df=12,
+            stop_words='english',
+            max_features=max_features,
+            preprocessor=self.no_number_preprocessor
+        )
+
+        texts = _df_t['titles']
+        X_titles_un_normalized = cv.fit_transform(texts)
+
+        X_titles = diag * X_titles_un_normalized
+
+        assert X_titles.shape[1] == max_features
+
+        aa = pd.DataFrame(
+            columns=['buyer_id', 'cv']
+        )
+
+        for i, row in self.merge_df.iterrows():
+            # print(row['buyer_id'])
+            row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
+            # print(X_titles[row_idx].shape)
+            aa = aa.append({
+                'buyer_id': row['buyer_id'],
+                'cv': X_titles[row_idx]
+            }, ignore_index=True)
+
+        assert aa.shape[0] == self.merge_df.shape[0]
+        bb = pd.merge(
+            self.merge_df,
+            aa,
+            left_on=['buyer_id'],
+            right_on=['buyer_id'])
+
+        assert bb.shape[0] == self.merge_df.shape[0]
+
+        f_name_raw = cv.get_feature_names()
+        self.textual_features_name = ['title_{}'.format(f_n) for f_n in f_name_raw]
+        df3 = pd.DataFrame(bb['cv'].values.tolist(), columns=self.textual_features_name)
+
+        before_shape = self.merge_df.shape[0]
+        self.merge_df = pd.concat([self.merge_df, df3], axis=1)
+        assert self.merge_df.shape[0] == before_shape
+
+        Logger.info('finish to insert textual features')
+        Logger.info('CountVectorizer properties: {}'.format(cv))
+
+    def _pad_description_df(self, _df_desc, _buyer_list):
+        """
+        auxiliary function - pad users that does not have any descriptions
+        """
+        input_shape = _df_desc.shape[0]
+        for _buyer in _buyer_list:
+            if _buyer not in list(_df_desc['buyer_id']):
+                _df_desc = _df_desc.append({
+                    'buyer_id': _buyer,
+                    'cnt': 0,
+                    'descriptions': ''
+                }, ignore_index=True)
+
+        Logger.info('Input: {}, Output: {}'.format(input_shape, _df_desc.shape[0]))
+        return _df_desc
+
+    def insert_descriptions_features(self):
+        # add descriptions n-grams features
+
+        if not self.descriptions_feature_flag:
+            Logger.info('descriptions features not in use')
+            return
+
+        else:
+            Logger.info('Start to extract descriptions features...')
+
+        _df_t = pd.read_csv(
+            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/descriptions_corpus_438.csv',
+            usecols=['buyer_id', 'descriptions', 'cnt']
+        )
+        # TODO filter by user id/name and remain only relevant id's
+        _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
+        _df_t = self._pad_description_df(_df_t, list(self.merge_df['buyer_id']))
+        # self.merge_df = self.merge_df.loc[self.merge_df['buyer_id'].isin(list(_df_t['buyer_id']))]
+        assert _df_t.shape[0] == self.merge_df.shape[0]
+        # normalized CountVectorizer by number of purchases
+        # defined diagonal matrix
+        cnt_vector = _df_t['cnt']
+        # cnt_vector = [1 / float(x) for x in cnt_vector]
+        cnt_vector = [1 / float(x) if x > 0 else 0 for x in cnt_vector]
+        c = np.array(cnt_vector)
+        diag = np.diag(c)
+
+        # defined CountVectorizer properties
+        max_features = 2000
+        cv_d = CountVectorizer(
+            lowercase=True,
+            ngram_range=(1, 2),
+            min_df=12,
+            stop_words='english',
+            max_features=max_features,
+            preprocessor=self.no_number_preprocessor
+        )
+        texts = _df_t['descriptions']
+        X_titles_un_normalized = cv_d.fit_transform(texts)
+
+        X_titles = diag * X_titles_un_normalized
+
+        assert X_titles.shape[1] == max_features
+
+        aa = pd.DataFrame(
+            columns=['buyer_id', 'cv_d']
+        )
+
+        for i, row in self.merge_df.iterrows():
+            # print(row['buyer_id'])
+            row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
+            # print(X_titles[row_idx].shape)
+            aa = aa.append({
+                'buyer_id': row['buyer_id'],
+                'cv_d': X_titles[row_idx]
+            }, ignore_index=True)
+
+        assert aa.shape[0] == self.merge_df.shape[0]
+        bb = pd.merge(
+            self.merge_df,
+            aa,
+            left_on=['buyer_id'],
+            right_on=['buyer_id'])
+
+        assert bb.shape[0] == self.merge_df.shape[0]
+
+        f_name_raw = cv_d.get_feature_names()
+        self.description_features_name = ['description_{}'.format(f_n) for f_n in f_name_raw]
+        df3 = pd.DataFrame(bb['cv_d'].values.tolist(), columns=self.description_features_name)
+
+        # TODO why assert is fail
+        before_shape = self.merge_df.shape[0]
+        self.merge_df = pd.concat([self.merge_df, df3], axis=1)
+        self.merge_df = self.merge_df[pd.notnull(self.merge_df['Site'])]
+
+        assert self.merge_df.shape[0] == before_shape
+
+        Logger.info('finish to insert description textual features')
+        Logger.info('CountVectorizer properties: {}'.format(cv_d))
 
     # remove participant with purchase amount below threshold
     # visual purchase histogram
@@ -266,7 +480,7 @@ class CalculateScore:
 
         self.merge_df.to_csv(self.dir_analyze_name + 'purchase_amount_after_threshold.csv')
         Logger.info('')
-        Logger.info('slice particpant below purchase threshold')
+        Logger.info('slice participants below purchase threshold')
         Logger.info('Save file: self.merge_df - ' + str(self.dir_analyze_name) + 'purchase_amount_after_threshold.csv')
 
         # histogram of number of purchases
@@ -276,7 +490,6 @@ class CalculateScore:
         plt.xlabel('#Purchases')
         plot_name = self.dir_analyze_name + 'histogram_purchases_per_user' + '_p_' + str(self.merge_df.shape[0]) + '_threshold_' + str(self.threshold_purchase) + '.png'
         plt.savefig(plot_name, bbox_inches='tight')
-        # plt.show()
         plt.close()
 
     # connect to purchase per vertical
@@ -733,6 +946,7 @@ class CalculateScore:
                 'Algeria': 9,
                 'India': 13,
                 'Poland': 9,
+                'Antigua and Barbuda': 4
             }[country]
 
         # TODO add countries
@@ -817,6 +1031,7 @@ class CalculateScore:
             self.merge_df.shape[1],
             self.cur_time
         ))
+        # TODO add content (about slicing: e.g. min purchase amount...)
         self.merge_df.to_csv(predefined_df_path, index=False)
         Logger.info('save pre-defined data set shape: {}'.format(self.merge_df.shape))
 
@@ -838,6 +1053,13 @@ class CalculateScore:
             list(), list(), list(), list(), list()
         openness_score_roc, conscientiousness_score_roc, extraversion_score_roc, agreeableness_score_roc, neuroticism_score_roc = \
             list(), list(), list(), list(), list()
+
+        # if self.descriptions_feature_flag:
+        #     self.lr_x_feature = self.lr_x_feature + self.textual_features_name + self.description_features_name
+        # elif self.title_feature_flag:
+        #     self.lr_x_feature = self.lr_x_feature + self.textual_features_name
+
+        Logger.info('add textual features: {}'.format(len(self.lr_x_feature)))
 
         relevant_X_columns = copy.deepcopy(self.lr_x_feature)
         map_dict_feature_non_zero = dict()
@@ -868,18 +1090,28 @@ class CalculateScore:
             if self.k_best_feature_flag:
                 X, X_train, X_test, k_feature = self._select_k_best_feature(X, y, X_train, y_train, X_test)
 
-            if self.classifier_type == 'xgb':
-                regr = XGBClassifier(
-                    n_estimators=self.xgb_n_estimators,
-                    max_depth=self.xgb_max_depth,
-                    learning_rate=self.xgb_eta,
-                    gamma=self.xgb_c,
-                    subsample=self.xgb_subsample,
-                    colsample_bytree=self.xgb_colsample_bytree
-                )
+            if True:
+                if self.classifier_type == 'xgb':
+                    regr = XGBClassifier(
+                        n_estimators=self.xgb_n_estimators,
+                        max_depth=self.xgb_max_depth,
+                        learning_rate=self.xgb_eta,
+                        gamma=self.xgb_c,
+                        subsample=self.xgb_subsample,
+                        colsample_bytree=self.xgb_colsample_bytree
+                    )
+                elif self.classifier_type == 'lr':
+                    self.penalty = random.choice(['l1', 'l2'])
+                    regr = linear_model.LogisticRegression(
+                        penalty=self.penalty,
+                        C=self.xgb_c,
+                        solver='liblinear'
+                    )
+                else:
+                    raise ValueError('unknown classifier type - {}'.format(self.classifier_type))
                 # subsample=0.8, colsample_bytree=1, gamma=1)
 
-                kfold = StratifiedKFold(n_splits=4, random_state=7)
+                kfold = StratifiedKFold(n_splits=self.n_splits)     # until 17.1 with: random_state=7
                 acc_arr = cross_val_score(regr, X, y, cv=kfold)
                 auc_arr = cross_val_score(regr, X, y, cv=kfold, scoring='roc_auc')
 
@@ -888,65 +1120,24 @@ class CalculateScore:
 
                 # extract feature importance
                 regr.fit(X, y)
-                dict_importance = dict(zip(k_feature, regr.feature_importances_))
+                dict_importance = dict(zip(k_feature, regr.feature_importances_)) if self.classifier_type == 'xgb' else {}
                 dict_param = self._log_parameters_order(dict_importance)
 
                 Logger.info("")
+                Logger.info('feature importance (SelectKBest): {}'.format(dict_param))
                 Logger.info('Accuracy: {}'.format(round(acc_mean, 2)))
                 Logger.info('AUC: {}'.format(str(round(auc_mean, 2))))
                 Logger.info('Accuracy list: {}'.format(acc_arr))
                 Logger.info('AUC list: {}'.format(auc_arr))
                 Logger.info(regr)
 
+                self._eli5_explain_weights(
+                    regr,
+                    f_names=[x.encode('utf-8') for x in k_feature],
+                    auc=round(auc_mean, 2),
+                    target_name=y_feature.split('_')[0]
+                )
                 # dict_param = dict(zip(k_feature, regr.feature_importances_))
-
-            elif self.classifier_type == 'lr':
-
-                if self.split_bool:
-                    Logger.info("implement logistic regression (without CV)")
-                    regr = linear_model.LogisticRegression(
-                        penalty=self.penalty,
-                        C=self.C,
-                        solver='liblinear'
-                    )
-                    regr.fit(X_train, y_train)
-                    train_score = regr.score(X_train, y_train)
-                    test_score = regr.score(X_test, y_test)
-                    prob_test_score = regr.predict_proba(X_test)
-                    y_1_prob = prob_test_score[:, 1]
-                    fpr, tpr, _ = roc_curve(y_test, y_1_prob)
-                    auc_score = auc(fpr, tpr)
-
-                    Logger.info("")
-                    Logger.info('train_score: {}'.format(round(train_score, 3)))
-                    Logger.info('test_score: {}'.format(round(test_score, 3)))
-                    Logger.info('auc score: {}'.format(str(round(auc_score, 3))))
-
-                    dict_param = dict(zip(k_feature, regr.coef_[0]))
-                    dict_param['intercept'] = regr.intercept_
-
-                else:
-                    Logger.info("implement CV logistic regression")
-                    regr = linear_model.LogisticRegressionCV(  # Cs=1,
-                        penalty=self.penalty,
-                        solver='liblinear',
-                        cv=model_selection.StratifiedKFold(n_splits=4, shuffle=True, random_state=None)
-                    )
-                    regr.fit(X_train, y_train)
-                    c_index = np.where(regr.Cs_ == regr.C_[0])[0][0]
-                    c = regr.C_[0], 3
-                    train_score = sum(regr.scores_[1][:, c_index]) / 4  # num splits
-
-                    Logger.info("")     # TODO log k fold CV score
-                    Logger.info('CV score: ' + str(round(train_score, 3)))
-                    Logger.info('C value: ' + str(round(regr.C_[0], 3)))
-
-                    dict_param = dict(zip(k_feature, regr.coef_[0]))
-                    dict_param['intercept'] = regr.intercept_[0]
-
-                    # TODO: implement this
-                    self.create_roc_cv_plt(X_train, y_train, regr.C_[0])
-
             else:
                 raise ValueError('unknown classifier type - {}'.format(self.classifier_type))
 
@@ -1031,6 +1222,7 @@ class CalculateScore:
             'h_limit': self.h_limit,
             'threshold': self.threshold_purchase,
             'k_features': X.shape[1] if self.k_best_feature_flag else self.k_best,
+            'penalty': self.penalty if self.classifier_type == 'lr' else '',
             'xgb_gamma': self.xgb_c,
             'xgb_eta': self.xgb_eta,
             'xgb_max_depth': self.xgb_max_depth,
@@ -1115,6 +1307,10 @@ class CalculateScore:
         """
         select K-best feature and transform feature set to k-feature.
         """
+        if self.k_best == 'all' or self.k_best > X_train.shape[1]:
+            Logger.info('changed K value to all due to origin k below number of features')
+            self.k_best = 'all'
+
         k_model = SelectKBest(f_classif, k=self.k_best).fit(X_train, y_train)
 
         idxs_selected = k_model.get_support(indices=True)
@@ -1156,443 +1352,6 @@ class CalculateScore:
                 Logger.info("{}: {}".format(k, round(v, 3)))
         Logger.info("")
         return d_view
-
-    def _create_auc_plot(self, fpr, tpr, auc_score, X_test, y_test, y_feature):
-        plt.figure()
-        lw = 2
-        plt.plot(fpr, tpr, color='darkorange', lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
-        plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title(str(y_feature) + ': test amount ' + str(X_test.shape[0]) + ', test prop ' + str(
-            round(sum(y_test) / len(y_test), 2)))
-        plt.legend(loc="lower right")
-
-        plot_name = str(round(auc_score, 2)) + '_ROC_k=' + str(self.k_best) + '_penalty=' + str(
-            self.penalty) + '_gap=' + str(
-            self.h_limit) + '_' + str(self.l_limit) + '_test_amount=' + \
-                    str(X_test.shape[0]) + '_threshold=' + str(self.threshold_purchase) + '_trait=' + str(
-            y_feature) + '_max=' + str(round(auc_score, 2)) + '.png'
-
-        if not os.path.exists(self.plot_directory + '/roc/'):
-            os.makedirs(self.plot_directory + '/roc/')
-
-        plot_path = self.plot_directory + '/roc/' + plot_name
-        plt.savefig(plot_path, bbox_inches='tight')
-        plt.close()
-
-    # calculate linear regression regression model
-    def calculate_linear_regression(self):
-
-        test_score = list()
-        train_score_check = list()
-        test_score_check = list()
-
-        # test score for each trait
-
-        openness_score_mae = list()
-        conscientiousness_score_mae = list()
-        extraversion_score_mae = list()
-        agreeableness_score_mae = list()
-        neuroticism_score_mae = list()
-
-        openness_score_pearson = list()
-        conscientiousness_score_pearson = list()
-        extraversion_score_pearson = list()
-        agreeableness_score_pearson = list()
-        neuroticism_score_pearson = list()
-
-        # train cv score for each trait
-        openness_score_cv = list()
-        conscientiousness_score_cv = list()
-        extraversion_score_cv = list()
-        agreeableness_score_cv = list()
-        neuroticism_score_cv = list()
-
-        # ROC test score for each trait
-        openness_score_roc = list()
-        conscientiousness_score_roc = list()
-        extraversion_score_roc = list()
-        agreeableness_score_roc = list()
-        neuroticism_score_roc = list()
-
-        import copy
-        relevant_X_columns = copy.deepcopy(self.lr_x_feature)
-
-        from sklearn import linear_model
-        from sklearn import model_selection
-        from sklearn.model_selection import train_test_split
-        from sklearn.metrics import roc_auc_score, roc_curve, auc
-        from sklearn.feature_selection import SelectKBest
-        from scipy.stats import pearsonr
-
-
-        for i in range(0, 1):  # iterate N iterations
-            for idx, y_feature in enumerate(self.lr_y_feature):    # iterate each trait
-                Logger.info('')
-                Logger.info('build linear regression model for: ' + str(y_feature))
-
-                self.raw_df = self.merge_df
-                self.raw_df.to_csv(self.dir_analyze_name + 'linear_regression_final_data.csv')
-                Logger.info('')
-                Logger.info('save file: ')
-
-                import copy
-                relevant_X_columns = copy.deepcopy(self.lr_x_feature)
-                if y_feature in relevant_X_columns:
-                    relevant_X_columns.remove(y_feature)
-
-                self.raw_df = self.raw_df[relevant_X_columns + [y_feature]]
-
-                # create corr df -> features and personality traits
-                if False:
-                    self.calculate_pearson_correlation(relevant_X_columns, y_feature, self.raw_df)
-
-                # TODO normalize without target column
-                # if self.bool_normalize_features:
-                #    self.raw_df = self.preprocessing_min_max(self.raw_df)
-
-                X = self.raw_df[relevant_X_columns]
-                y = self.raw_df[y_feature]
-
-                self.split_bool = True
-                if self.split_bool:
-                    X_train, X_test, y_train, y_test = train_test_split(
-                        X,
-                        y,
-                        test_size=self.test_fraction
-                    )
-                    Logger.info('train: class 0 ratio: ' + str(sum(y_train) / len(y_train)))
-                    Logger.info('test: class 0 ratio: ' + str(sum(y_test) / len(y_test)))
-                else:
-                    X_train = X
-                    y_train = y
-
-                Logger.info('all: class 0 ratio:  ' + str(sum(y)/len(y)))
-
-                '''train_df, test_df = train_test_split(
-                    self.raw_df,
-                    test_size=self.test_fraction
-                )
-
-                X_train = train_df[relevant_X_columns]
-                y_train = train_df[y_feature]
-                X_test = test_df[relevant_X_columns]
-                y_test = test_df[y_feature]
-                '''
-
-                X_train_old = copy.deepcopy(X_train)
-                y_train_old = copy.deepcopy(y_train)
-
-                if True:
-                    from sklearn.feature_selection import f_classif
-                    k_model = SelectKBest(f_classif, k=self.k_best).fit(X_train, y_train)
-
-                    idxs_selected = k_model.get_support(indices=True)
-                    k_feature = list()
-                    # features_dataframe_new = X_train[idxs_selected]
-                    for idx, cur_feature in enumerate(X):
-                        if idx in idxs_selected:
-                            k_feature.append(cur_feature)
-
-                    X_train = k_model.transform(X_train)
-
-                    if self.split_bool:
-                        X_test = k_model.transform(X_test)
-
-                        assert X_train.shape[1] == X_test.shape[1]
-
-                # X_train.to_csv(self.dir_analyze_name + 'logistic_regression_df.csv')
-                # y_train.to_csv(self.dir_analyze_name + 'logistic_regression_y_df.csv')
-                Logger.info('')
-                Logger.info('Total sample size: ' + str(self.raw_df.shape[0]))
-                Logger.info('Number of features before selecting: ' + str(self.raw_df.shape[1]))
-                Logger.info('Number of k best features: ' + str(X_train.shape[1]))
-
-                from sklearn import datasets, linear_model
-                from sklearn.model_selection import cross_validate
-                from sklearn.metrics.scorer import make_scorer
-                from sklearn.metrics import confusion_matrix
-                from sklearn.svm import LinearSVC
-                from sklearn.linear_model import LinearRegression
-                from sklearn.metrics import mean_absolute_error
-                from sklearn.metrics import r2_score
-                from sklearn.svm import SVC
-                from sklearn.linear_model import RidgeCV, Ridge
-
-
-                '''regr = cross_validate(
-                    LinearRegression(),
-                    X_train,
-                    y_train,
-                    cv=6,
-                    scoring='r2', # 'mean_absolute_error',
-                    return_train_score=True,
-                    verbose=2
-                )'''
-
-                # regr = RidgeCV(normalize=True)
-                regr = Ridge(normalize=True)
-                '''regr = LinearRegression(
-                     normalize=True
-                )'''
-
-                regr.fit(X_train, y_train)
-
-                # train_score = regr.score(X_train, y_train)
-                if self.split_bool:
-
-                    y_pred_test = regr.predict(X_test)
-                    mae_test = mean_absolute_error(y_test, y_pred_test)
-                    pearson_c_test, p_value_test = pearsonr(y_test, y_pred_test)
-
-                    y_pred_train = regr.predict(X_train)
-                    mae_train = mean_absolute_error(y_train, y_pred_train)
-                    pearson_c_train, p_value_train = pearsonr(y_train, y_pred_train)
-                    train_score = mae_train
-
-                    mae_threshold = mean_absolute_error(y_test, [y_train.mean()] * len(y_test))
-
-                    Logger.info('')
-                    Logger.info('MAE train: ' + str(mae_train))
-                    Logger.info('MAE test: ' + str(mae_test))
-                    Logger.info('MAE threshold: ' + str(mae_threshold))
-
-                    Logger.info('Pearson train: ' + str(round(pearson_c_train, 2)) + ', p val: ' + str(round(p_value_train, 3)))
-                    Logger.info('Pearson test: ' + str(round(pearson_c_test, 2)) + ', p val: ' + str(round(p_value_test, 3)))
-                    Logger.info('')
-
-                    min_s = min(min(y_pred_test), min(y_pred_train), min(y_test), min(y_train))
-                    max_s = max(max(y_pred_test), max(y_pred_train), max(y_test), max(y_train))
-
-                    plt.figure(figsize=(11, 6))
-                    plt.subplot(1, 2, 1)
-                    plt.scatter(y_test, y_pred_test) # , s=area, c=colors, alpha=0.5)
-                    # plt.plot([0, 1], [0, 1], color='navy')
-                    plt.plot([min_s, max_s], [min_s, max_s], color='navy')
-                    plt.xlim([min_s, max_s])
-                    plt.ylim([min_s, max_s])
-                    # plt.xlim([0.4, 1.0])
-                    # plt.ylim([0.4, 1.05])
-                    plt.xlabel('Y test')
-                    plt.ylabel('Y predicted')
-                    plt.title(str(y_feature) + ' ' + 'MAE test: ' + str(round(mae_test, 3)) + '\n Pe c: ' + str(round(pearson_c_test, 2)) + ' P_val: ' + str(round(p_value_test, 3)))
-                    plt.legend(loc="lower right")
-
-                    plt.subplot(1, 2, 2)
-                    plt.scatter(y_train, y_pred_train)  # , s=area, c=colors, alpha=0.5)
-                    plt.plot([min_s, max_s], [min_s, max_s], color='navy')
-                    plt.xlim([min_s, max_s])
-                    plt.ylim([min_s, max_s])
-                    plt.xlabel('Y test')
-                    plt.ylabel('Y predicted')
-                    plt.title(str(y_feature) + ' ' + 'MAE train: ' + str(round(mae_train, 3)) + '\n Pe c: ' + str(round(pearson_c_train, 2)) + ' P_val: ' + str(round(p_value_train, 3)))
-                    plt.legend(loc="lower right")
-                    # plt.show()
-
-                    plot_name = str(round(pearson_c_test, 3)) + '_Pearson_MAE=' + str(round(mae_test, 3)) + '_k=' + str(self.k_best) + '_penalty=' + str(
-                        self.penalty) + '_test_amount=' + \
-                                str(X_test.shape[0]) + '_threshold=' + str(self.threshold_purchase) + '_trait=' + str(
-                        y_feature) + '.png'
-
-                    import os
-                    if not os.path.exists(self.plot_directory + '/MAE_Pearson/'):
-                        os.makedirs(self.plot_directory + '/MAE_Pearson/')
-
-                    plot_path = self.plot_directory + '/MAE_Pearson/' + plot_name
-                    plt.savefig(plot_path, bbox_inches='tight')
-                    plt.close()
-
-                dict_param = dict(zip(k_feature, regr.coef_))
-                dict_param['intercept'] = regr.intercept_
-                # print(dictionary)
-                d_view = [(v, k) for k, v in dict_param.iteritems()]
-                d_view.sort(reverse=True)  #
-
-                Logger.info("")
-                Logger.info("Model Parameters:")
-                # sorted(((v, k) for k, v in dict_param.iteritems()), reverse=True)
-                for v, k in d_view:
-                    if v != 0:
-                        Logger.info("%s: %f" % (k, v))
-                Logger.info("")
-
-                if self.split_bool:
-                    if y_feature == 'openness_trait':
-                        openness_score_mae.append(mae_test)
-                        openness_score_pearson.append(pearson_c_test)
-                    if y_feature == 'conscientiousness_trait':
-                        conscientiousness_score_mae.append(mae_test)
-                        conscientiousness_score_pearson.append(pearson_c_test)
-                    if y_feature == 'extraversion_trait':
-                        extraversion_score_mae.append(mae_test)
-                        extraversion_score_pearson.append(pearson_c_test)
-                    if y_feature == 'agreeableness_trait':
-                        agreeableness_score_mae.append(mae_test)
-                        agreeableness_score_pearson.append(pearson_c_test)
-                    if y_feature == 'neuroticism_trait':
-                        neuroticism_score_mae.append(mae_test)
-                        neuroticism_score_pearson.append(pearson_c_test)
-                '''if y_feature == 'openness_group':
-                    openness_score_cv.append()
-                if y_feature == 'conscientiousness_group':
-                    conscientiousness_score_cv.append(train_score)
-                if y_feature == 'extraversion_group':
-                    extraversion_score_cv.append(train_score)
-                if y_feature == 'agreeableness_group':
-                    agreeableness_score_cv.append(train_score)
-                if y_feature == 'neuroticism_group':
-                    neuroticism_score_cv.append(train_score)'''
-        if self.split_bool:
-            if len(openness_score_mae):
-                self.linear_regression_mae['openness'] = (sum(openness_score_mae) / len(openness_score_mae))
-            if len(conscientiousness_score_mae):
-                self.linear_regression_mae['conscientiousness'] = (
-                sum(conscientiousness_score_mae) / len(conscientiousness_score_mae))
-            if len(extraversion_score_mae):
-                self.linear_regression_mae['extraversion'] = (sum(extraversion_score_mae) / len(extraversion_score_mae))
-            if len(agreeableness_score_mae):
-                self.linear_regression_mae['agreeableness'] = (sum(agreeableness_score_mae) / len(agreeableness_score_mae))
-            if len(neuroticism_score_mae):
-                self.linear_regression_mae['neuroticism'] = (sum(neuroticism_score_mae) / len(neuroticism_score_mae))
-
-            if len(openness_score_pearson):
-                self.linear_regression_pearson['openness'] = (sum(openness_score_pearson) / len(openness_score_pearson))
-            if len(conscientiousness_score_pearson):
-                self.linear_regression_pearson['conscientiousness'] = (
-                sum(conscientiousness_score_pearson) / len(conscientiousness_score_pearson))
-            if len(extraversion_score_pearson):
-                self.linear_regression_pearson['extraversion'] = (sum(extraversion_score_pearson) / len(extraversion_score_pearson))
-            if len(agreeableness_score_pearson):
-                self.linear_regression_pearson['agreeableness'] = (sum(agreeableness_score_pearson) / len(agreeableness_score_pearson))
-            if len(neuroticism_score_pearson):
-                self.linear_regression_pearson['neuroticism'] = (sum(neuroticism_score_pearson) / len(neuroticism_score_pearson))
-
-        '''if len(openness_score_cv):
-            self.logistic_regression_accuracy_cv['openness'] = (sum(openness_score_cv) / len(openness_score_cv))
-        if len(conscientiousness_score_cv):
-            self.logistic_regression_accuracy_cv['conscientiousness'] = (sum(conscientiousness_score_cv) / len(conscientiousness_score_cv))
-        if len(extraversion_score_cv):
-            self.logistic_regression_accuracy_cv['extraversion'] = (sum(extraversion_score_cv) / len(extraversion_score_cv))
-        if len(agreeableness_score_cv):
-            self.logistic_regression_accuracy_cv['agreeableness'] = (sum(agreeableness_score_cv) / len(agreeableness_score_cv))
-        if len(neuroticism_score_cv):
-            self.logistic_regression_accuracy_cv['neuroticism'] = (sum(neuroticism_score_cv) / len(neuroticism_score_cv))'''
-
-        # from collections import Counter
-
-        # Logger.info('Counter C: ' + str(Counter(c_check)))
-
-        '''print(true_list)
-        print(len(true_list))
-        print(false_list)
-        print(len(false_list))'''
-
-        # print('total ratio: ' + str(float(len(true_list))/float(len(true_list)+len(false_list))))
-        return
-
-    def create_roc_cv_plt(self, X_train, y_train, C):
-        return
-        import numpy as np
-        from scipy import interp
-        import matplotlib.pyplot as plt
-        from itertools import cycle
-
-        from sklearn import svm, datasets
-        from sklearn.metrics import roc_curve, auc
-        from sklearn.model_selection import StratifiedKFold
-        from sklearn import linear_model
-        X = X_train
-        y = y_train
-
-        # #############################################################################
-        # Data IO and generation
-
-        # Import some data to play with
-        '''iris = datasets.load_iris()
-        X = iris.data
-        y = iris.target
-        X, y = X[y != 2], y[y != 2]
-        n_samples, n_features = X.shape
-
-        # Add noisy features
-        random_state = np.random.RandomState(0)
-        X = np.c_[X, random_state.randn(n_samples, 200 * n_features)]'''
-
-        # #############################################################################
-        # Classification and ROC analysis
-
-        # Run classifier with cross-validation and plot ROC curves
-        cv = StratifiedKFold(n_splits=4, shuffle=True)
-        classifier = linear_model.LogisticRegression(  # Cs=1,
-            C = C,
-            penalty=self.penalty,
-            solver='liblinear')
-        regr = linear_model.LogisticRegression(penalty=self.penalty, C=self.C)
-        '''cv=model_selection.StratifiedKFold(n_splits=4, shuffle=True, random_state=None))
-        classifier = svm.SVC(kernel='linear', probability=True,
-                             random_state=random_state)'''
-
-        tprs = []
-        aucs = []
-        mean_fpr = np.linspace(0, 1, 100)
-
-        i = 0
-        for train, test in cv.split(X, y):
-            import copy
-            X_train = X[train]
-            X_train = copy.deepcopy(X_train)
-
-            y_train = y[train]
-            y_train = copy.deepcopy(y_train)
-            # y_train.reshape(y_train.shape[0], y_train.shape[1])
-            X_test = X[test]
-            X_test = copy.deepcopy(X_test)
-
-            y_test = y[test]
-            y_test = copy.deepcopy(y_test)
-            # y_test.reshape(y_test.shape[0], y_test.shape[1])
-            probas_ = regr.fit(X_train, y_train).predict_proba(X_test)
-            # probas_ = regr.fit(X, y).predict_proba(X)
-
-            # Compute ROC curve and area the curve
-            fpr, tpr, thresholds = roc_curve(y_test, probas_[:, 1])
-            # fpr, tpr, thresholds = roc_curve(y, probas_[:, 1])
-            tprs.append(interp(mean_fpr, fpr, tpr))
-            tprs[-1][0] = 0.0
-            roc_auc = auc(fpr, tpr)
-            aucs.append(roc_auc)
-            plt.plot(fpr, tpr, lw=1, alpha=0.3,
-                     label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
-
-            i += 1
-        plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
-                 label='Luck', alpha=.8)
-
-        mean_tpr = np.mean(tprs, axis=0)
-        mean_tpr[-1] = 1.0
-        mean_auc = auc(mean_fpr, mean_tpr)
-        std_auc = np.std(aucs)
-        plt.plot(mean_fpr, mean_tpr, color='b',
-                 label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
-                 lw=2, alpha=.8)
-
-        std_tpr = np.std(tprs, axis=0)
-        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
-                         label=r'$\pm$ 1 std. dev.')
-
-        plt.xlim([-0.05, 1.05])
-        plt.ylim([-0.05, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('Receiver operating characteristic example')
-        plt.legend(loc="lower right")
-        plt.show()
-        return
 
     # add High/Low based percentile to traits
     def add_high_low_traits_column(self):
@@ -1682,12 +1441,7 @@ class CalculateScore:
 
         # add percentile traits columns
         for (idx, row_participant) in self.merge_df.iterrows():
-            # Logger.info('Calculate percentile traits for participant: ' + str(row_participant['Email address']))
             self._cal_participant_traits_percentile_values(idx, row_participant)
-
-        # self.merge_df = self.participant_df.copy()
-
-        return
 
     # after delete un valid participant
     def cal_all_participant_percentile_value(self):
@@ -1714,6 +1468,78 @@ class CalculateScore:
             trait_val += row[filter_col]
         trait_val = float(trait_val)/float(len(cur_trait_list))     # mean of traits
         return trait_val
+
+    def _eli5_explain_weights(self, clf, f_names, auc, target_name):
+        """Explains top K features with the highest coefficient values, per class, using eli5"""
+
+        # avoid overload on eli5 folder
+        if auc < 0.79:
+            return
+
+        Logger.info('eli5_explain_weights:')
+
+        dir_output = '/Users/gelad/Personality-based-commerce/results/BFI_results/classifiers_feature_importance/{}'.format(
+            target_name)
+        if not os.path.exists(dir_output):
+            os.makedirs(dir_output)
+
+        if isinstance(clf, XGBClassifier):
+            c_type = 'XGB'
+            eli5_ew = explain_weights_xgboost(clf.get_booster(), feature_names=f_names, target_names=[target_name])
+
+            wf_path = dir_output + '/{}_{}_threshold={}_k={}_type={}_n_estimator={}_depth={}_eta={}_c={}_sub={}_col={}_{}.html'.format(
+                auc,
+                c_type,
+                self.threshold_purchase,
+                self.k_best,
+                self.user_type,
+                self.xgb_n_estimators,
+                self.xgb_max_depth,
+                self.xgb_eta,
+                self.xgb_c,
+                self.xgb_subsample,
+                self.xgb_colsample_bytree,
+                self.cur_time
+            )
+
+            # eli5_ew = show_weights(clf.get_booster(), feature_names=f_names)
+        elif isinstance(clf, linear_model.LogisticRegression):
+            c_type = 'LR'
+            eli5_ew = explain_linear_classifier_weights(
+                clf,
+                feature_names=f_names,
+                target_names=['Low', 'High'],
+                top=100
+            )
+
+            # self.penalty
+            # write explanation html to file
+            wf_path = dir_output + '/{}_{}_threshold={}_k={}_type={}_penalty={}_c={}_{}.html'.format(
+                auc,
+                c_type,
+                self.threshold_purchase,
+                self.k_best,
+                self.user_type,
+                self.penalty,
+                self.xgb_c,
+                self.cur_time
+            )
+
+        else:
+            # Logger.info('unsupported clf type')
+            raise ValueError("unsupported clf type")
+
+        eli5_fh = formatters.format_as_html(eli5_ew)
+
+        # write explanation html to file
+        prefix_to_html = ''
+
+        lines_final = prefix_to_html + eli5_fh
+        # lines_final = prefix_to_html + eli5_fh.encode('utf8', 'replace')
+
+        Logger.info("writing weight explanation to file {}".format(wf_path))
+        with open(wf_path, 'w') as wf:
+            wf.writelines(lines_final)
 
 
 def main(participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name,
@@ -1746,6 +1572,5 @@ def main(participant_file, item_aspects_file, purchase_history_file, valid_users
 
 
 if __name__ == '__main__':
-
     raise SystemExit('not in use - please run using Wrapper_build_feature_dataset')
 
