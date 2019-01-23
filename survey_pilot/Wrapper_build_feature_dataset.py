@@ -1,10 +1,12 @@
 from __future__ import print_function
 from build_feature_dataset import CalculateScore        # class which extract data set from input files
 from utils.logger import Logger
+from utils.utils import load_gensim_kv
 from time import gmtime, strftime
 import os
 import pandas as pd
 import sys
+# from utils.single_embedding import MeanEmbeddingVectorizer
 
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -43,9 +45,34 @@ xgb_max_depth = bfi_config.predict_trait_configs['xgb_max_depth']
 bool_slice_gap_percentile = bfi_config.predict_trait_configs['bool_slice_gap_percentile']
 
 
+embedding_dim = bfi_config.predict_trait_configs['embedding_dim']
+embedding_limit = bfi_config.predict_trait_configs['embedding_limit']
+embedding_type = bfi_config.predict_trait_configs['embedding_type']
+
+
 class Wrapper:
 
     def __init__(self):
+
+        if dict_feature_flag['title_feature_flag']:
+            if embedding_type == 'ft_amazon':
+                path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/embeddings.vec'
+                # embedding_dim = 300
+                # embedding_limit = 200000
+            elif embedding_type == 'glove':
+                path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/glove.6B.{}d.txt'.format(
+                    embedding_dim)
+            else:
+                raise ValueError('unknown embedding type')
+
+            print('Loading embeddings...    {}'.format(path_embd))
+            self.kv = load_gensim_kv(path_embd, vector_size=embedding_dim, limit=embedding_limit)
+            assert len(self.kv.vocab) == embedding_limit
+            print('Loaded embedding!        dim: {}, limit: {}'.format(embedding_dim, embedding_limit))
+
+        else:
+            print('Embeddings did not loaded - flage set to False')
+            self.kv = None
 
         # file arguments
         self.participant_file = participant_file
@@ -143,9 +170,9 @@ class Wrapper:
 
         self.result_df = pd.DataFrame(columns=[
             'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit',
-            'threshold', 'k_features', 'penalty', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
+            'threshold', 'k_features', 'k_flag', 'penalty', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
             'accuracy_k_fold', 'auc_k_fold', 'train_accuracy', 'data_size', 'majority_ratio', 'features',
-            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree'
+            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree', 'emb_dim', 'emb_limit', 'emb_type'
         ])
 
         self.max_score = {
@@ -209,8 +236,6 @@ class Wrapper:
                 continue
             Logger.info('Attribute: ' + str(attr) + ', Value: ' + str(attr_value))
         Logger.info('')
-
-        return
 
     ############################# main functions #############################
     '''
@@ -315,14 +340,9 @@ class Wrapper:
                 # plot results
                 # if we split test+train we present test score + ROC curve
                 # else we only present CV score without TODO ROC curve
-                """
-                if self.split_test:
-                    self.plot_traits_accuracy_versus_threshold(cur_penalty, k_best)
-                    self.plot_traits_roc_versus_threshold(cur_penalty, k_best)
-                else:
-                    self.plot_traits_accuracy_versus_threshold_CV(cur_penalty, k_best)
-                """
+                
         self._save_result_df()
+        self._save_to_ablation_csv()
 
     def wrapper_experiments_linear(self):
 
@@ -402,7 +422,7 @@ class Wrapper:
                                        self.user_meta_feature_flag, self.aspect_feature_flag, self.h_limit,
                                        self.l_limit, self.k_best, self.plot_directory, self.user_type,
                                        self.normalize_traits, self.classifier_type, self.split_bool, xgb_c, xgb_eta,
-                                       xgb_max_depth, self.dir_logistic_results, self.cur_time, self.k_best_feature_flag)
+                                       xgb_max_depth, self.dir_logistic_results, self.cur_time, self.k_best_feature_flag, self.kv)
 
         # create data set
         if not self.predefined_data_set_flag:
@@ -416,13 +436,11 @@ class Wrapper:
             calculate_obj.remove_except_cf()                        # remove not CF participants
             calculate_obj.extract_user_purchase_connection()        # insert purchase and vertical type to model
             calculate_obj.insert_meta_category()                    # Add eBay meta categories features
-            calculate_obj.insert_titles_features()                  # add titles n-grams features
+            # calculate_obj.insert_titles_features_count()                  # add titles n-grams features
+            calculate_obj.insert_titles_features_embedding()                  # add titles n-grams features
             calculate_obj.insert_descriptions_features()            # add descriptions n-grams features
 
-            if self.aspect_feature_flag:
-                calculate_obj.extract_item_aspect()                     # add features of dominant item aspect
-            else:
-                print('skip - item aspects does not inserted')
+            calculate_obj.extract_item_aspect()                     # add features of dominant item aspect
 
             calculate_obj.normalize_personality_trait()                 # normalize trait to 0-1 scale (div by 5)
 
@@ -455,8 +473,9 @@ class Wrapper:
         """
         insert model result for a given configuration
         """
+        cur_configs_five = list()
         for row in model_results_array:
-            self.result_df = self.result_df.append({
+            config_result_dict = {
                 'method': row['method'],
                 'classifier': row['classifier'],
                 'CV_bool': row['CV_bool'],
@@ -467,6 +486,7 @@ class Wrapper:
                 # 'C': row['C'],
                 'threshold': row['threshold'],
                 'k_features': row['k_features'],
+                'k_flag': bfi_config.predict_trait_configs['k_best_feature_flag'],
                 'penalty': row['penalty'],
                 'xgb_gamma': row['xgb_gamma'],
                 'xgb_eta': row['xgb_eta'],
@@ -483,13 +503,33 @@ class Wrapper:
                 'xgb_n_estimators': row['xgb_n_estimators'],
                 'xgb_subsample': row['xgb_subsample'],
                 'xgb_colsample_bytree': row['xgb_colsample_bytree'],
-            }, ignore_index=True)
+                'emb_dim': bfi_config.predict_trait_configs['embedding_dim'],
+                'emb_limit': bfi_config.predict_trait_configs['embedding_limit'],
+                'emb_type': bfi_config.predict_trait_configs['embedding_type']
+            }
+
+            cur_configs_five.append(config_result_dict)
+            self.result_df = self.result_df.append(config_result_dict, ignore_index=True)
 
             Logger.info('insert model number into result df: {}/{}, {}%'.format(
                 self.result_df.shape[0],
                 self.num_experiments,
                 round(float(self.result_df.shape[0])/self.num_experiments, 2)*100
             ))
+
+        """ insert one row """
+        result_df_path = os.path.join(self.dir_logistic_results, 'intermediate_models')
+        result_df_path = os.path.join(result_df_path, '{}.csv'.format(self.cur_time))
+        """if os.path.isfile(result_df_path):
+            intermediate_df = pd.read_csv(result_df_path)
+        else:
+            intermediate_df = pd.DataFrame()
+
+        for one_run in cur_configs_five:
+            intermediate_df = intermediate_df.append(one_run, ignore_index=True)"""
+
+        self.result_df.to_csv(result_df_path, index=False)
+        Logger.info('update intermediate df: {} path :{}'.format(self.result_df.shape[0], result_df_path))
 
     def _save_result_df(self):
         """
@@ -517,6 +557,89 @@ class Wrapper:
         result_df_path = os.path.join(result_df_path, '{}_{}.csv'.format(prefix_name, self.cur_time))
         self.result_df.to_csv(result_df_path, index=False)
         Logger.info('save result model: {}'.format(result_df_path))
+
+    def _save_to_ablation_csv(self):
+        """
+        add a row to ablation csv file
+        :return:
+        """
+        try:
+            import os
+            result_df_path = os.path.join(self.dir_logistic_results, 'ablation_test')
+            if not os.path.exists(result_df_path):
+                os.makedirs(result_df_path)
+            result_df_path = os.path.join(result_df_path, '{}.csv'.format('ablation'))
+
+            o = round(max(self.result_df.loc[self.result_df['trait'] == 'openness']['auc']), 2)
+            c = round(max(self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']), 2)
+            e = round(max(self.result_df.loc[self.result_df['trait'] == 'extraversion']['auc']), 2)
+            a = round(max(self.result_df.loc[self.result_df['trait'] == 'agreeableness']['auc']), 2)
+            n = round(max(self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']), 2)
+
+            import csv
+            dict_val = {
+                    'time_purchase_ratio': self.time_purchase_ratio_feature_flag,
+                    'time_purchase_meta': self.time_purchase_meta_feature_flag,
+                    'vertical': self.vertical_ratio_feature_flag,
+                    'meta_categories': self.meta_category_feature_flag,
+                    'purchase_percentile': self.purchase_percentile_feature_flag,
+                    'user_meta': self.user_meta_feature_flag,
+                    'item_aspects': self.aspect_feature_flag,
+                    'text_title': bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag'],
+                    'text_desc': bfi_config.predict_trait_configs['dict_feature_flag'][
+                    'descriptions_feature_flag'],
+                    'o': o,
+                    'c': c,
+                    'e': e,
+                    'a': a,
+                    'n': n,
+                    'time': self.cur_time,
+                    'classifier': self.classifier_type,
+                    'n_splits': bfi_config.predict_trait_configs['num_splits'],
+                    'l_limit': self.l_limit,
+                    'h_limit': self.h_limit,
+                    'thresholds': self.threshold_list,
+                    'user_type': self.user_type,
+                    'k_flag': self.k_best_feature_flag,
+                    'vectorizer_type': bfi_config.predict_trait_configs['dict_vec']['vec_type'],
+                    'emb_type': bfi_config.predict_trait_configs['embedding_type'],
+                    'emb_dim': bfi_config.predict_trait_configs['embedding_dim']
+                }
+            d_ablation = pd.read_csv(result_df_path)
+
+            # os.rename(result_df_path, '{}_{}.csv'.format(result_df_path[:-4], self.cur_time))
+            backlog_path = '{}/ablation_backlog/{}.csv'.format(result_df_path[:-12], self.cur_time)
+            os.rename(result_df_path, backlog_path)
+            Logger.info('store last ablation to backlog: {}'.format(backlog_path))
+
+            d_ablation = d_ablation.append(dict_val, ignore_index=True)
+            d_ablation.to_csv(result_df_path, index=False)
+            Logger.info('update ablation df: {}'.format(d_ablation.shape))
+
+            """fieldnames = ['time_purchase_ratio',
+                          'time_purchase_meta',
+                          'vertical',
+                          'meta_categories',
+                          'purchase_percentile',
+                          'user_meta',
+                          'item_aspects',
+                          'text_title',
+                          'text_desc',
+                          'o',
+                          'c',
+                          'e',
+                          'a',
+                          'n',
+                          'time',
+                          'classifier',
+                          'n_splits',
+                          'l_limit',
+                          'h_limit']
+                          """
+
+        except Exception:
+            Logger.info('Exception during insertion to ablation test')
+        return
 
     ############################# visualization functions #############################
 

@@ -7,7 +7,6 @@
 """
 'participant_file': '/Users/gelad/Personality-based-commerce/results/data/BFI_results/participant_bfi_score_clean_duplication/clean_participant_985_2018-12-07 15:44:21.csv',
 """
-
 """
 common use: (until 8.12)
 'participant_file': '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/clean_participant_695_2018-05-13 16:54:12.csv',
@@ -15,8 +14,6 @@ common use: (until 8.12)
 'purchase_history_file': '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_purchase_history.csv',
 'valid_users_file': '/Users/gelad/Personality-based-commerce/data/participant_data/1425 users input/personality_valid_users.csv',
 """
-
-
 """
 from 8.12 threshold 5, distance: 0.8
 # 'participant_file': '../results/data/BFI_results/participant_bfi_score_clean_duplication/clean_participant_1165_2018-12-07 22:26:53.csv',
@@ -51,37 +48,69 @@ predict_trait_configs = {
         'user_meta_feature_flag': True,
         'aspect_feature_flag': False,
         'title_feature_flag': True,
-        'descriptions_feature_flag': True
+        'descriptions_feature_flag': False
     },
 
     # load pre-defined data set - problem due to slice already min purchase amount etc.
-    
 
     'predefined_data_set_path': '/Users/gelad/Personality-based-commerce/results/BFI_results/pre_defined_df/shape=227_58_time=_2018-12-06 15:02:03.csv',
     'predefined_data_set_flag': False,
+
     'model_method': 'logistic',
     'bool_slice_gap_percentile': True,
     'split_bool': True,
-    'l_limit': 0.4,
-    'h_limit': 0.6,
-    'k_best_feature_flag': True,
-    'k_best_list': [8],
 
-    'num_splits': 10,
-    'k_rand': [10, 80],
-    'classifier_type': 'lr',                                # 'xgb',
-    'user_type': 'cf',                                      # 'cf', 'all'
-    'threshold_list': [20, 30, 35, 40],                         # select 0 to save all users (on predefined df)
+
+    'l_limit': 0.3,
+    'h_limit': 0.7,
+
+    'num_splits': 5,
+    'k_best_feature_flag': True,
+    'k_rand': [199, 200],
+
+    'k_best_list': [50, 100, 200],
+    'classifier_type': 'xgb',                          # 'xgb',
+    'user_type': 'all',                                 # 'cf', 'all'
+    'threshold_list': [30, 40],     # 20               # select 0 to save all users (on predefined df)
     'penalty': ['l1'],
     'C': 1,
-    'xgb_c': [600, 400, 300, 200, 100, 50, 30, 20, 17, 15, 14, 12, 10, 8, 6, 5, 3, 2, 1, 0.1, 500, 1000],
-    #  [400, 300, 200, 150, 100, 50, 30, 20, 17, 14, 12, 10, 9, 8, 7, 5, 3, 2, 1, 500, 600, 1000],  # 0.01, 0.001],
-    'xgb_eta': [1],                                         # 0.3, 0.01, 0.001],
-    'xgb_max_depth': [1, 2],                                # [9, 2, 3, 5, 7],
+    # 'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 600, 500, 400, 300, 200, 50, 30, 17, 15, 14, 12, 10, 8, 6, 1000],
+    'xgb_c': [0.1, 1, 5],
+    'xgb_eta': [0.3, 0.01],          # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
+    'xgb_max_depth': [3, 5],       #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
+
+    """
+    'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 50, 30, 15, 10, 8],
+    'xgb_eta': [1, 3, 0.3, 0.01, 0.001],          # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
+    'xgb_max_depth': [2, 3, 5, 7],       #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
+    """
 
     'xgb_n_estimators': 500,                # un-relevant - randomize value during inside
     'xgb_subsample': 1,                     # un-relevant - randomize value during inside
-    'xgb_colsample_bytree': 1               # un-relevant - randomize value during inside
+    'xgb_colsample_bytree': 1,               # un-relevant - randomize value during inside
+
+    'min_df': 60,
+    'max_textual_features': 100,
+
+    'embedding_dim': 100,
+    'embedding_limit': 100000,
+    'embedding_type': 'glove',   # 'glove'-50,100,200,300 'ft_amazon'-300
+
+    'dict_vec': {
+        'max_features': 2000,  # 30000 number of added features
+        'ngram_range': [1, 2],
+        'stop_words': 'english',
+        'min_df': 3,
+        'max_df': 0.99,
+        'norm': 'l2',
+        'missing_val': 'avg_idf',    # 'max_idf', 'avg_idf', 'zero' - relevant in embedding
+        # 'vec_type': 'vec_tfidf_embeds'        # by pertrained embddeing dim
+        # 'vec_type': 'vec_count'               # by 'dict_vec'['max_features']
+        # 'vec_type': 'vec_tfidf'                 # by 'dict_vec'['max_features']
+        # 'vec_type': 'vec_avg_embds'           # by pertrained embddeing dim
+        'vec_type': 'vec_tfidf_embeds'
+    },
+    # 'ft_amazon', 300, 200000
 }
 
 bfi_test_information = {
@@ -91,6 +120,8 @@ bfi_test_information = {
     'question_agreeableness': [2, 7, 12, 17, 22, 27, 32, 37, 42],
     'question_neuroticism': [4, 9, 14, 19, 24, 29, 34, 39]
 }
+
+black_list = ['123ebay','1768064','9285414','h_vivic_vpxwxxtjql','l0rd0ct0d0rk','pug.the.wizard','normality_is_an_illusion','fms*play','mortalis_123','mysss123','redzeb123']
 
 feature_data_set = {
         'pearson_relevant_feature': ['Age', 'openness_percentile',
@@ -113,7 +144,7 @@ feature_data_set = {
 
         },
         'time_purchase_ratio_feature': ['day_ratio', 'evening_ratio', 'night_ratio', 'weekend_ratio'],
-        'time_purchase_meta_feature': ['first_purchase', 'last_purchase', 'tempo_purchase'],
+        'time_purchase_meta_feature': ['first_purchase', 'last_purchase', 'tempo_purchase', 'number_purchase'],
 
         'vertical_ratio_feature': [
             'Electronics_ratio', 'Fashion_ratio', 'Home & Garden_ratio', 'Collectibles_ratio','Lifestyle_ratio',
@@ -252,7 +283,7 @@ feature_data_set = {
                                         'q3_purchase_price_percentile', 'min_purchase_price_percentile',
                                         'max_purchase_price_percentile'],
 
-        'user_meta_feature': ['Age', 'gender', 'number_purchase'],
+        'user_meta_feature': ['Age', 'gender'],
         'aspect_feature': ['color_ratio', 'colorful_ratio', 'protection_ratio', 'country_ratio', 'brand_ratio',
                            'brand_unlabeled_ratio']
 }
