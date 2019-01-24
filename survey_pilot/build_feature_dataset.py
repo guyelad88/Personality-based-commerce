@@ -93,7 +93,8 @@ class CalculateScore:
 
         self.models_results = list()            # store model result (later will insert into a result CSV)
 
-        self.textual_features_name = list()     # contain title features names
+        self.titles_features_name = list()          # contain title features names
+        self.description_features_name = list()     # contain description features names
 
         # system hyper_parameter
         self.threshold_purchase = threshold_purchase    # throw below this number
@@ -159,6 +160,9 @@ class CalculateScore:
         self.embedding_limit = bfi_config.predict_trait_configs['embedding_limit']
         self.embedding_type = bfi_config.predict_trait_configs['embedding_type']
         self.dict_vec = bfi_config.predict_trait_configs['dict_vec']
+
+        self.textual_title_file_path = bfi_config.predict_trait_configs['title_corpus']
+        self.textual_description_file_path = bfi_config.predict_trait_configs['description_corpus']
 
         self.black_list = bfi_config.black_list
 
@@ -256,7 +260,7 @@ class CalculateScore:
         if self.aspect_feature_flag:
             self.lr_x_feature.extend(self.aspect_feature)
         if self.title_feature_flag:
-            self.lr_x_feature.extend(self.textual_features_name)
+            self.lr_x_feature.extend(self.titles_features_name)
         if self.descriptions_feature_flag:
             self.lr_x_feature.extend(self.description_features_name)
 
@@ -298,113 +302,41 @@ class CalculateScore:
         # r = re.sub('(\d)+', '', tokens.lower())
         return r
 
-    def insert_titles_features_count(self):
-        # add titles n-grams features
-        # load df of titles
-        raise ValueError('now use of count vectorizer (or at least tf-idf for sure before splitting)')
-        if not self.title_feature_flag:
-            Logger.info('title features not in use - skip')
-            return
-        else:
-            Logger.info('Start to extract title features...')
+    def insert_textual_features_embedding(self, text_type):
+        """
+        create Mean Embedding vector to each user (regared to his titles/descriptions)
+        """
+        if text_type not in ['titles', 'descriptions']:
+            raise ValueError('text type is not defined: {}'.format(text_type))
 
-        _df_t = pd.read_csv(
-            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/titles_corpus_710.csv',
-            usecols=['buyer_id', 'titles', 'cnt']
-        )
-        # TODO filter by user id/name and remain only relevant id's
-        _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
-        assert _df_t.shape[0] == self.merge_df.shape[0]
-        # normalized CountVectorizer by number of purchases
-        # defined diagonal matrix
-        cnt_vector = _df_t['cnt']
-        cnt_vector = [1 / float(x) for x in cnt_vector]
-        c = np.array(cnt_vector)
-        diag = np.diag(c)
+        # self.textual_title_file_path = bfi_config.predict_trait_configs['title_corpus']
+        # self.textual_description_file_path = bfi_config.predict_trait_configs['description_corpus']
+        if text_type == 'titles':
+            if not self.title_feature_flag:
+                Logger.info('title features not in use - skip')
+                return
+            else:
+                Logger.info('Start to extract title features...')
 
-        # defined CountVectorizer properties
-        cv = CountVectorizer(
-            lowercase=True,
-            ngram_range=(1, 2),
-            min_df=self.min_df,
-            stop_words='english',
-            max_features=self.max_textual_features,
-            preprocessor=self.no_number_preprocessor
-        )
+            _df_t = pd.read_csv(
+                self.textual_title_file_path,
+                usecols=['buyer_id', text_type, 'cnt']
+            )
+        elif text_type == 'descriptions':
+            if not self.descriptions_feature_flag:
+                Logger.info('descriptions features not in use - skip')
+                return
+            else:
+                Logger.info('Start to extract descriptions features...')
 
-        texts = _df_t['titles']
-        X_titles_un_normalized = cv.fit_transform(texts)
-
-        X_titles = diag * X_titles_un_normalized
-        print(X_titles.shape[1])
-        assert X_titles.shape[1] == self.max_textual_features
-
-        aa = pd.DataFrame(
-            columns=['buyer_id', 'cv']
-        )
-
-        for i, row in self.merge_df.iterrows():
-            # print(row['buyer_id'])
-            row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
-            # print(X_titles[row_idx].shape)
-            aa = aa.append({
-                'buyer_id': row['buyer_id'],
-                'cv': X_titles[row_idx]
-            }, ignore_index=True)
-
-        assert aa.shape[0] == self.merge_df.shape[0]
-        bb = pd.merge(
-            self.merge_df,
-            aa,
-            left_on=['buyer_id'],
-            right_on=['buyer_id'])
-
-        assert bb.shape[0] == self.merge_df.shape[0]
-
-        f_name_raw = cv.get_feature_names()
-        self.textual_features_name = ['title_{}'.format(f_n) for f_n in f_name_raw]
-        df3 = pd.DataFrame(bb['cv'].values.tolist(), columns=self.textual_features_name)
-
-        before_shape = self.merge_df.shape[0]
-        self.merge_df = pd.concat([self.merge_df, df3], axis=1)
-        assert self.merge_df.shape[0] == before_shape
-
-        Logger.info('finish to insert textual features')
-        Logger.info('CountVectorizer properties: {}'.format(cv))
-
-    def insert_titles_features_embedding(self):
-        # add titles n-grams features
-        # load df of titles
-        if not self.title_feature_flag:
-            Logger.info('title features not in use - skip')
-            return
-        else:
-            Logger.info('Start to extract title features...')
-
-        _df_t = pd.read_csv(
-            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/titles_corpus_710.csv',
-            usecols=['buyer_id', 'titles', 'cnt']
-        )
+            _df_t = pd.read_csv(
+                self.textual_description_file_path,
+                usecols=['buyer_id', text_type, 'cnt']
+            )
 
         _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
-        assert _df_t.shape[0] == self.merge_df.shape[0]
-        # normalized CountVectorizer by number of purchases
-        # defined diagonal matrix
-        # cnt_vector = _df_t['cnt']
-        # cnt_vector = [1 / float(x) for x in cnt_vector]
-        # c = np.array(cnt_vector)
-        # diag = np.diag(c)
-
-        # collect words with at least 20 tf
-        """count_vectorizer_threshold = CountVectorizer(
-            lowercase=True,
-            ngram_range=(1, 2),
-            min_df=20,
-            stop_words='english'
-        )
-        texts = _df_t['titles']
-        count_vectorizer_threshold.fit(texts)
-        remain_uni_grams = count_vectorizer_threshold.get_feature_names()"""
+        if text_type == 'titles':
+            assert _df_t.shape[0] == self.merge_df.shape[0]
 
         cv = MeanEmbeddingVectorizer(word2vec=self.kv, norm='l2')
         Logger.info('EMBEDDING DETAILS: type: {}, dim: {}, limit: {}'.format(
@@ -413,48 +345,75 @@ class CalculateScore:
             self.embedding_type
         ))
 
-        texts = _df_t['titles']
+        texts = _df_t[text_type]        # load relevant column: text_type=titles/descriptions
         texts = texts.str.lower()
         stop_words_en = stop_words.ENGLISH_STOP_WORDS
-        texts = texts.apply(lambda x: [item for item in x.split() if item not in stop_words_en])
-        # texts = texts.apply(lambda x: [item for item in x.split() if item in frozenset(remain_uni_grams)])
+        texts = texts.apply(lambda x: [item for item in x.split() if item not in stop_words_en])  # TODO cut by min IDF
+
         texts = texts.tolist()
         X_titles_un_normalized = cv.fit_transform(texts)
-
-        # X_titles = diag * X_titles_un_normalized
         X_titles = X_titles_un_normalized
         print(X_titles.shape[1])
-        # assert X_titles.shape[1] == self.max_textual_features
 
         aa = pd.DataFrame(
-            columns=['buyer_id', 'cv']
+            columns=['buyer_id', 'cv_{}'.format(text_type)]
         )
 
         for i, row in self.merge_df.iterrows():
-            # print(row['buyer_id'])
-            row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
-            # print(X_titles[row_idx].shape)
+            if text_type == 'titles':
+                row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
+                row_ndarray = X_titles[row_idx]
+            elif text_type == 'descriptions':
+                temp_row = np.where(_df_t['buyer_id'] == row['buyer_id'])[0]
+                if len(temp_row) == 0:
+                    continue
+                    row_ndarray = np.zeros(X_titles.shape[1], dtype=int)
+                elif len(temp_row) == 1:
+                    row_ndarray = X_titles[temp_row[0]]
+                else:
+                    raise('')
+            else:
+                raise('')
+
             aa = aa.append({
                 'buyer_id': row['buyer_id'],
-                'cv': X_titles[row_idx]
+                'cv_{}'.format(text_type): row_ndarray
             }, ignore_index=True)
 
-        assert aa.shape[0] == self.merge_df.shape[0]
+        if text_type == 'titles':
+            assert aa.shape[0] == self.merge_df.shape[0]
+
         bb = pd.merge(
             self.merge_df,
             aa,
             left_on=['buyer_id'],
             right_on=['buyer_id'])
 
-        assert bb.shape[0] == self.merge_df.shape[0]
+        if text_type == 'titles':
+            assert bb.shape[0] == self.merge_df.shape[0]
 
         f_name_raw = cv.get_feature_names()
-        self.textual_features_name = ['title_{}'.format(f_n) for f_n in f_name_raw]
-        df3 = pd.DataFrame(bb['cv'].values.tolist(), columns=self.textual_features_name)
 
-        before_shape = self.merge_df.shape[0]
-        self.merge_df = pd.concat([self.merge_df, df3], axis=1)
-        assert self.merge_df.shape[0] == before_shape
+        if text_type == 'titles':
+            self.titles_features_name = ['{}_{}'.format(text_type, f_n) for f_n in f_name_raw]
+            df3 = pd.DataFrame(bb['cv_{}'.format(text_type)].values.tolist(), columns=self.titles_features_name)
+
+        elif text_type == 'descriptions':
+            self.description_features_name = ['{}_{}'.format(text_type, f_n) for f_n in f_name_raw]
+            df3 = pd.DataFrame(bb['cv_{}'.format(text_type)].values.tolist(), columns=self.description_features_name)
+
+        else:
+            raise ValueError('unknown text type: {}'.format(text_type))
+
+        if text_type == 'titles':
+            before_shape = self.merge_df.shape[0]
+            self.merge_df = pd.concat([self.merge_df, df3], axis=1)
+            assert self.merge_df.shape[0] == before_shape
+        elif text_type == 'descriptions':
+            bb = bb.drop(['cv_{}'.format(text_type)], axis=1)
+            before_shape = bb.shape[0]
+            self.merge_df = pd.concat([bb, df3], axis=1)
+            assert self.merge_df.shape[0] == before_shape
 
         Logger.info('finish to insert textual features')
         Logger.info('CountVectorizer properties: {}'.format(cv))
@@ -485,8 +444,6 @@ class CalculateScore:
             usecols=['buyer_id', 'titles', 'cnt']
         )
         all_buyers_id = list(_X_train['buyer_id']) + list(_X_test['buyer_id'])
-        # _df_train = _df_purchase_titles.loc[_df_purchase_titles['buyer_id'].isin(list(_X_train['buyer_id']))]
-        # _df_test = _df_purchase_titles.loc[_df_purchase_titles['buyer_id'].isin(list(_X_test['buyer_id']))]
 
         _df_train = pd.merge(_df_purchase_titles, _X_train, on='buyer_id')
         _df_test = pd.merge(_df_purchase_titles, _X_test, on='buyer_id')
@@ -537,15 +494,6 @@ class CalculateScore:
         # remove unwanted columns
         Logger.info('After added titles features: train: {} test: {}'.format(_X_train.shape, _X_test.shape))
         return _X_train, _X_test, list(_X_train)
-
-
-        # TODO make this work for Count
-        # defined diagonal matrix
-        # cnt_vector = _df_t['cnt']
-        # cnt_vector = [1 / float(x) for x in cnt_vector]
-        # c = np.array(cnt_vector)
-        # diag = np.diag(c)
-
 
     def _pad_description_df(self, _df_desc, _buyer_list):
         """
@@ -740,11 +688,6 @@ class CalculateScore:
         item_aspect_obj.add_aspect_features()
         self.merge_df = item_aspect_obj.merge_df
         Logger.info('number of features after add item aspect: {}'.format(self.merge_df.shape[1]))
-
-    # TODO edit - add textual feature
-    def textual_feature(self):
-        # self.merge_df['title_length'] = np.nan
-        return
 
     # normalize trait to 0-1 scale (div by 5)
     def normalize_personality_trait(self):
@@ -1192,15 +1135,6 @@ class CalculateScore:
 
         return self.user_id_name_dict, histogram_purchase_list
 
-    def calculate_pearson_correlation(self):
-
-        corr_df = self.merge_df.corr(method='pearson')
-        pearson_path = os.path.join(self.dir_logistic_results, 'corr', '{}.csv'.format(self.cur_time))
-        corr_df.to_csv(pearson_path)
-        Logger.info('')
-        Logger.info('save pearson correlation df')
-        Logger.info('Save file path: - {}'.format(pearson_path))
-
     def save_predefined_data_set(self):
         predefined_df_path = os.path.join(self.dir_logistic_results, 'pre_defined_df')
         if not os.path.exists(predefined_df_path):
@@ -1269,24 +1203,12 @@ class CalculateScore:
                 else:
                     raise ValueError('unknown classifier type - {}'.format(self.classifier_type))
 
-                # kfold = StratifiedKFold(n_splits=self.n_splits)     # until 17.1 with: random_state=7
-                # acc_arr = cross_val_score(regr, X, y, cv=kfold)
-                # auc_arr = cross_val_score(regr, X, y, cv=kfold, scoring='roc_auc')
-
-                # implement bad select-k-best
-
-                # X, y = self._select_k_best_feature_old(X, y, '', '', '')
-                # X, X_train, X_test, k_feature = self._select_k_best_feature_old(X, y, X_train, y_train, X_test)
-
                 # implement cross validation
-                # return acc_arr, auc_arr
                 acc_arr, auc_arr = self._cross_validation_implementation(regr, X, y, y_feature)
                 acc_mean = round(sum(acc_arr)/len(acc_arr), 2)
                 auc_mean = round(sum(auc_arr)/len(auc_arr), 2)
 
                 # extract feature importance
-                # regr.fit(X, y)
-                # dict_importance = dict(zip(k_feature, regr.feature_importances_)) if self.classifier_type == 'xgb' else {}
                 dict_importance = {}
                 dict_param = self._log_parameters_order(dict_importance)
 
@@ -1315,7 +1237,7 @@ class CalculateScore:
 
         # kfold = StratifiedKFold(n_splits=self.n_splits, random_state=None, shuffle=False)
         # for train_index, test_index in kfold.split(_X, _y):
-        skf = StratifiedKFold(n_splits=self.n_splits)
+        skf = StratifiedKFold(n_splits=self.n_splits, random_state=42)
         skf.get_n_splits(_X, _y)
         for train_index, test_index in skf.split(_X, _y):
             X_train, X_test = _X.iloc[train_index], _X.iloc[test_index]
@@ -1348,17 +1270,6 @@ class CalculateScore:
 
             acc_arr.append(cur_acc)
             auc_arr.append(cur_auc)
-
-            """try:
-                self._eli5_explain_weights(
-                    _regr,
-                    f_names=[x.encode('utf-8') for x in k_feature],
-                    auc=round(cur_auc, 2),
-                    target_name=y_feature.split('_')[0]
-                )
-            except Exception:
-                Logger.info('Exception during eli5')
-            """
 
         return acc_arr, auc_arr
 
@@ -1462,45 +1373,6 @@ class CalculateScore:
             X_test, y_test = None, None
 
         return X_train, X_test, y_train, y_test
-
-    def _select_k_best_feature_old(self, X, y, X_train, y_train, X_test):
-        """
-        select K-best feature and transform feature set to k-feature.
-        """
-        # raise('not in use')
-
-        if self.k_best == 'all' or self.k_best > X.shape[1]: # X_train.shape[1]:
-            Logger.info('changed K value to all due to origin k below number of features')
-            self.k_best = 'all'
-
-        # k_model = SelectKBest(f_classif, k=self.k_best).fit(X_train, y_train)
-        k_model = SelectKBest(f_classif, k=self.k_best).fit(X, y)
-        # X = k_model.transform(X)
-
-        idxs_selected = k_model.get_support(indices=True)
-        k_feature = list()
-
-        for idx, cur_feature in enumerate(X):
-            if idx in idxs_selected:
-                k_feature.append(cur_feature)
-
-        X = X[k_feature]
-        return X, y
-
-        X_train = k_model.transform(X_train)
-        X = k_model.transform(X)
-
-        if self.split_bool:
-            X_test = k_model.transform(X_test)
-
-            assert X_train.shape[1] == X_test.shape[1]
-
-        Logger.info('Total sample size: {}'.format(self.raw_df.shape[0]))
-        Logger.info('Number of features before selecting: {}'.format(self.raw_df.shape[1]))
-        Logger.info('Number of k best features: {}'.format(X_train.shape[1]))
-        Logger.info('K feature selected: {}'.format(', '.join(k_feature)))
-
-        return X, X_train, X_test, k_feature
 
     def _select_k_best_feature(self, X_train, y_train, X_test, f_names):
         """
@@ -1742,34 +1614,8 @@ class CalculateScore:
             wf.writelines(lines_final)
 
 
-def main(participant_file, item_aspects_file, purchase_history_file, valid_users_file, dir_analyze_name,
-         threshold_purchase, bool_slice_gap_percentile, bool_normalize_features, c_value, regularization):
-
-    calculate_obj = CalculateScore(participant_file, item_aspects_file, purchase_history_file, valid_users_file,
-                                   dir_analyze_name, threshold_purchase, bool_slice_gap_percentile,
-                                   bool_normalize_features, c_value, regularization)    # create object and variables
-
-    calculate_obj.load_clean_csv_results()              # load data set
-    calculate_obj.clean_df()                            # clean df - e.g. remain valid users only
-    calculate_obj.create_feature_list()                 # create x_feature (structure only)
-
-    # calculate personality trait per user + percentile per trait
-    calculate_obj.change_reverse_value()                # change specific column into reverse mode
-    calculate_obj.cal_participant_traits_values()       # calculate average traits and percentile value
-    calculate_obj.insert_gender_feature()               # add gender feature
-
-    calculate_obj.extract_user_purchase_connection()    # insert purchase and vertical type to model
-    calculate_obj.insert_money_feature()                # add feature contain money issue
-    calculate_obj.insert_time_feature()                 # add time purchase feature
-
-    # calculate_obj.textual_feature()                       # TODO even basic feature
-    calculate_obj.extract_item_aspect()                     # TODO add
-    # calculate_obj.cal_all_participant_percentile_value()  # TODO need to add
-
-    calculate_obj.calculate_logistic_regression()       # predict traits H or L
-    # calculate_obj.calculate_linear_regression()         # predict traits using other feature
-    # calculate_obj.calculate_pearson_correlation()       # calculate pearson correlation
-
+def main():
+    pass
 
 if __name__ == '__main__':
     raise SystemExit('not in use - please run using Wrapper_build_feature_dataset')

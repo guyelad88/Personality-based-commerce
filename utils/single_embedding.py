@@ -3,6 +3,7 @@ from logging import getLogger
 from collections import defaultdict
 
 from gensim.models import KeyedVectors
+from gensim.models import FastText
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 
@@ -34,13 +35,14 @@ class _SingleEmbeddingBaseVectorizer(object):
             self.num_vectors = len(word2vec)
             self.emb_vocab = set(word2vec.keys())
 
-        elif isinstance(word2vec, KeyedVectors):
+        # elif isinstance(word2vec, KeyedVectors) or isinstance(word2vec, FastText):
+        else:
             self.dim = word2vec.vector_size
             self.num_vectors = len(word2vec.vocab)
             self.emb_vocab = set(word2vec.vocab.keys())
             self._is_gensim = True
-        else:
-            raise TypeError("unsupported word2vec type")
+        # else:
+        #    raise TypeError("unsupported word2vec type")
 
         self.word2vec = word2vec
 

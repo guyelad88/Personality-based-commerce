@@ -1,7 +1,7 @@
 from __future__ import print_function
 from build_feature_dataset import CalculateScore        # class which extract data set from input files
 from utils.logger import Logger
-from utils.utils import load_gensim_kv
+from utils.utils import load_gensim_kv, load_gensim_kv_fasttext
 from time import gmtime, strftime
 import os
 import pandas as pd
@@ -54,20 +54,29 @@ class Wrapper:
 
     def __init__(self):
 
-        if dict_feature_flag['title_feature_flag']:
+        if dict_feature_flag['title_feature_flag'] or dict_feature_flag['descriptions_feature_flag']:
+            print('Loading embeddings...    {}'.format(embedding_type))
             if embedding_type == 'ft_amazon':
                 path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/embeddings.vec'
-                # embedding_dim = 300
-                # embedding_limit = 200000
+                self.kv = load_gensim_kv(path_embd, vector_size=embedding_dim, limit=embedding_limit)
+                assert len(self.kv.vocab) == embedding_limit
+
             elif embedding_type == 'glove':
                 path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/glove.6B.{}d.txt'.format(
                     embedding_dim)
+                self.kv = load_gensim_kv(path_embd, vector_size=embedding_dim, limit=embedding_limit)
+                assert len(self.kv.vocab) == embedding_limit
+
+            elif embedding_type == 'fasttext':
+                path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/cc.en.300.bin'
+                self.kv = load_gensim_kv_fasttext(path_embd, vector_size=embedding_dim, limit=embedding_limit)
+
             else:
                 raise ValueError('unknown embedding type')
 
-            print('Loading embeddings...    {}'.format(path_embd))
-            self.kv = load_gensim_kv(path_embd, vector_size=embedding_dim, limit=embedding_limit)
-            assert len(self.kv.vocab) == embedding_limit
+            # print('Loading embeddings...    {}'.format(path_embd))
+            # self.kv = load_gensim_kv(path_embd, vector_size=embedding_dim, limit=embedding_limit)
+
             print('Loaded embedding!        dim: {}, limit: {}'.format(embedding_dim, embedding_limit))
 
         else:
@@ -151,7 +160,7 @@ class Wrapper:
             'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit',
             'threshold', 'k_features', 'k_flag', 'penalty', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
             'accuracy_k_fold', 'auc_k_fold', 'train_accuracy', 'data_size', 'majority_ratio', 'features',
-            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree', 'emb_dim', 'emb_limit', 'emb_type', 'vec_type', 'vec_max_feature'
+            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree', 'emb_dim', 'emb_limit', 'emb_type', 'vec_type', 'vec_max_feature', 'vec_missing_val', 'vec_min_df', 'vec_max_df'
         ])
 
         self.max_score = {
@@ -344,7 +353,9 @@ class Wrapper:
             calculate_obj.extract_user_purchase_connection()        # insert purchase and vertical type to model
             calculate_obj.insert_meta_category()                    # Add eBay meta categories features
             # calculate_obj.insert_titles_features_count()                  # add titles n-grams features
-            calculate_obj.insert_titles_features_embedding()                  # add titles n-grams features
+            calculate_obj.insert_textual_features_embedding('descriptions')  # add titles n-grams features
+            calculate_obj.insert_textual_features_embedding('titles')                  # add titles n-grams features
+
             calculate_obj.insert_descriptions_features()            # add descriptions n-grams features
 
             calculate_obj.extract_item_aspect()                     # add features of dominant item aspect
@@ -414,7 +425,10 @@ class Wrapper:
                 'emb_limit': bfi_config.predict_trait_configs['embedding_limit'],
                 'emb_type': bfi_config.predict_trait_configs['embedding_type'],
                 'vec_type': bfi_config.predict_trait_configs['dict_vec']['vec_type'],
-                'vec_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features']
+                'vec_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features'],
+                'vec_missing_val': bfi_config.predict_trait_configs['dict_vec']['missing_val'],
+                'vec_min_df': bfi_config.predict_trait_configs['dict_vec']['min_df'],
+                'vec_max_df': bfi_config.predict_trait_configs['dict_vec']['max_df']
             }
 
             cur_configs_five.append(config_result_dict)
@@ -513,8 +527,11 @@ class Wrapper:
                     'vectorizer_type': bfi_config.predict_trait_configs['dict_vec']['vec_type'],
                     'emb_type': bfi_config.predict_trait_configs['embedding_type'],
                     'emb_dim': bfi_config.predict_trait_configs['embedding_dim'],
-                    'vectorizer_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features']
-                }
+                    'vectorizer_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features'],
+                    'vec_min_df': bfi_config.predict_trait_configs['dict_vec']['min_df'],
+                    'vec_max_df': bfi_config.predict_trait_configs['dict_vec']['max_df'],
+                    'vec_missing': bfi_config.predict_trait_configs['dict_vec']['missing_val'],
+            }
             d_ablation = pd.read_csv(result_df_path)
 
             # os.rename(result_df_path, '{}_{}.csv'.format(result_df_path[:-4], self.cur_time))

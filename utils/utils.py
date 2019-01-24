@@ -1,11 +1,19 @@
 import numpy as np
 import pandas as pd
 from gensim.models import KeyedVectors
+from gensim.models import FastText
 
 
 def load_gensim_kv(path_embd, vector_size, binary=False, limit=None):
     kv = KeyedVectors(vector_size=vector_size).load_word2vec_format(path_embd, binary=binary, limit=limit)
     return kv
+
+
+def load_gensim_kv_fasttext(path_embd, vector_size, binary=False, limit=None):
+    kv = FastText.load_fasttext_format(path_embd)
+    return kv.wv
+    # return kv
+
 
 def list_of_strings_to_list_of_lists(list_of_strings):
     list_of_lists = [[e for e in s.split()] for s in list_of_strings]
