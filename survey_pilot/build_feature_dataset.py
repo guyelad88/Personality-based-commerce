@@ -125,7 +125,7 @@ class CalculateScore:
 
         self.n_splits = bfi_config.predict_trait_configs['num_splits']
         self.pearson_relevant_feature = bfi_config.feature_data_set['pearson_relevant_feature']
-
+        self.categ_threshold = bfi_config.feature_data_set['categ_threshold']
         self.lr_y_feature = bfi_config.feature_data_set['lr_y_feature']
         self.lr_y_logistic_feature = bfi_config.feature_data_set['lr_y_logistic_feature']
         self.lr_y_linear_feature = bfi_config.feature_data_set['lr_y_linear_feature']
@@ -162,20 +162,6 @@ class CalculateScore:
 
         self.black_list = bfi_config.black_list
 
-        measure_template = {
-                'openness': 0.0,
-                'conscientiousness': 0.0,
-                'extraversion': 0.0,
-                'agreeableness': 0.0,
-                'neuroticism': 0.0
-        }
-
-        self.logistic_regression_accuracy = dict(measure_template)
-        self.logistic_regression_roc = dict(measure_template)
-        self.logistic_regression_accuracy_cv = dict(measure_template)
-        self.linear_regression_mae = dict(measure_template)
-        self.linear_regression_pearson = dict(measure_template)
-
     # load csv into df
     def load_clean_csv_results(self):
 
@@ -183,8 +169,6 @@ class CalculateScore:
         self.item_aspects_df = pd.read_csv(self.item_aspects_file)
         self.purchase_history_df = pd.read_csv(self.purchase_history_file, error_bad_lines=False)
         self.valid_users_df = pd.read_csv(self.valid_users_file)
-
-        return
 
     def clean_df(self):
         # use only valid user id
@@ -230,6 +214,8 @@ class CalculateScore:
 
         Logger.info('')
         Logger.info('extract user regards to user_type variable ' + str(self.user_type))
+
+        assert self.user_type == 'all'
 
         if self.user_type not in ['all', 'cf', 'ebay-tech']:
             raise('undefined user_type: ' + str(self.user_type))
@@ -293,7 +279,7 @@ class CalculateScore:
         _num_row_before = self.merge_df.shape[0]
 
         categ_df = pd.read_csv(
-            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/thresh=0_user_purchases_per_category.csv'
+            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/thresh={}_user_purchases_per_category.csv'.format(self.categ_threshold)
         )
         # m = pd.merge(self.merge_df, categ_df, left_on='eBay site user name', right_on='buyer_name')
         self.merge_df = pd.merge(
@@ -409,6 +395,17 @@ class CalculateScore:
         # c = np.array(cnt_vector)
         # diag = np.diag(c)
 
+        # collect words with at least 20 tf
+        """count_vectorizer_threshold = CountVectorizer(
+            lowercase=True,
+            ngram_range=(1, 2),
+            min_df=20,
+            stop_words='english'
+        )
+        texts = _df_t['titles']
+        count_vectorizer_threshold.fit(texts)
+        remain_uni_grams = count_vectorizer_threshold.get_feature_names()"""
+
         cv = MeanEmbeddingVectorizer(word2vec=self.kv, norm='l2')
         Logger.info('EMBEDDING DETAILS: type: {}, dim: {}, limit: {}'.format(
             self.embedding_dim,
@@ -420,8 +417,8 @@ class CalculateScore:
         texts = texts.str.lower()
         stop_words_en = stop_words.ENGLISH_STOP_WORDS
         texts = texts.apply(lambda x: [item for item in x.split() if item not in stop_words_en])
+        # texts = texts.apply(lambda x: [item for item in x.split() if item in frozenset(remain_uni_grams)])
         texts = texts.tolist()
-
         X_titles_un_normalized = cv.fit_transform(texts)
 
         # X_titles = diag * X_titles_un_normalized
@@ -479,7 +476,7 @@ class CalculateScore:
         """
         if not self.title_feature_flag:
             Logger.info('titles textual feature not in use')
-            return _X_train, _X_test
+            return _X_train, _X_test, list(_X_train)
 
         Logger.info('Before added titles features: train: {} test: {}'.format(_X_train.shape, _X_test.shape))
 
@@ -539,7 +536,7 @@ class CalculateScore:
 
         # remove unwanted columns
         Logger.info('After added titles features: train: {} test: {}'.format(_X_train.shape, _X_test.shape))
-        return _X_train, _X_test
+        return _X_train, _X_test, list(_X_train)
 
 
         # TODO make this work for Count
@@ -1229,14 +1226,6 @@ class CalculateScore:
 
         self.models_results = list()     # contain all results for the 5 traits models
 
-        # test score for each trait
-        openness_score, conscientiousness_score, extraversion_score, agreeableness_score, neuroticism_score = \
-            list(), list(), list(), list(), list()
-        openness_score_cv, conscientiousness_score_cv, extraversion_score_cv, agreeableness_score_cv, neuroticism_score_cv = \
-            list(), list(), list(), list(), list()
-        openness_score_roc, conscientiousness_score_roc, extraversion_score_roc, agreeableness_score_roc, neuroticism_score_roc = \
-            list(), list(), list(), list(), list()
-
         Logger.info('add textual features: {}'.format(len(self.lr_x_feature)))
 
         relevant_X_columns = copy.deepcopy(self.lr_x_feature)
@@ -1309,15 +1298,6 @@ class CalculateScore:
                 Logger.info('AUC list: {}'.format(auc_arr))
                 Logger.info(regr)
 
-                try:
-                    self._eli5_explain_weights(
-                        regr,
-                        f_names=[x.encode('utf-8') for x in k_feature],
-                        auc=round(auc_mean, 2),
-                        target_name=y_feature.split('_')[0]
-                    )
-                except Exception:
-                    Logger.info('Exception during eli5')
                 # dict_param = dict(zip(k_feature, regr.feature_importances_))
             else:
                 raise ValueError('unknown classifier type - {}'.format(self.classifier_type))
@@ -1328,68 +1308,6 @@ class CalculateScore:
             self._prepare_model_result(
                 y_feature, acc_mean, auc_mean, '', dict_param, data_size, majority_ratio, acc_arr, auc_arr, X
             )
-
-            if self.classifier_type == 'lr' and self.split_bool:
-                if y_feature == 'openness_group':
-                    openness_score.append(acc_mean)
-                    openness_score_roc.append(auc_mean)
-                if y_feature == 'conscientiousness_group':
-                    conscientiousness_score.append(acc_mean)
-                    conscientiousness_score_roc.append(auc_mean)
-                if y_feature == 'extraversion_group':
-                    extraversion_score.append(acc_mean)
-                    extraversion_score_roc.append(auc_mean)
-                if y_feature == 'agreeableness_group':
-                    agreeableness_score.append(acc_mean)
-                    agreeableness_score_roc.append(auc_mean)
-                if y_feature == 'neuroticism_group':
-                    neuroticism_score.append(acc_mean)
-                    neuroticism_score_roc.append(auc_mean)
-
-            if y_feature == 'openness_group':
-                openness_score_cv.append(acc_mean)
-            if y_feature == 'conscientiousness_group':
-                conscientiousness_score_cv.append(acc_mean)
-            if y_feature == 'extraversion_group':
-                extraversion_score_cv.append(acc_mean)
-            if y_feature == 'agreeableness_group':
-                agreeableness_score_cv.append(acc_mean)
-            if y_feature == 'neuroticism_group':
-                neuroticism_score_cv.append(acc_mean)
-
-        if self.split_bool:
-            if len(openness_score):
-                self.logistic_regression_accuracy['openness'] = (sum(openness_score) / len(openness_score))
-            if len(conscientiousness_score):
-                self.logistic_regression_accuracy['conscientiousness'] = (sum(conscientiousness_score) / len(conscientiousness_score))
-            if len(extraversion_score):
-                self.logistic_regression_accuracy['extraversion'] = (sum(extraversion_score) / len(extraversion_score))
-            if len(agreeableness_score):
-                self.logistic_regression_accuracy['agreeableness'] = (sum(agreeableness_score) / len(agreeableness_score))
-            if len(neuroticism_score):
-                self.logistic_regression_accuracy['neuroticism'] = (sum(neuroticism_score) / len(neuroticism_score))
-
-            if len(openness_score):
-                self.logistic_regression_roc['openness'] = (sum(openness_score_roc) / len(openness_score_roc))
-            if len(conscientiousness_score):
-                self.logistic_regression_roc['conscientiousness'] = (sum(conscientiousness_score_roc) / len(conscientiousness_score_roc))
-            if len(extraversion_score):
-                self.logistic_regression_roc['extraversion'] = (sum(extraversion_score_roc) / len(extraversion_score_roc))
-            if len(agreeableness_score):
-                self.logistic_regression_roc['agreeableness'] = (sum(agreeableness_score_roc) / len(agreeableness_score_roc))
-            if len(neuroticism_score):
-                self.logistic_regression_roc['neuroticism'] = (sum(neuroticism_score_roc) / len(neuroticism_score_roc))
-
-        if len(openness_score_cv):
-            self.logistic_regression_accuracy_cv['openness'] = (sum(openness_score_cv) / len(openness_score_cv))
-        if len(conscientiousness_score_cv):
-            self.logistic_regression_accuracy_cv['conscientiousness'] = (sum(conscientiousness_score_cv) / len(conscientiousness_score_cv))
-        if len(extraversion_score_cv):
-            self.logistic_regression_accuracy_cv['extraversion'] = (sum(extraversion_score_cv) / len(extraversion_score_cv))
-        if len(agreeableness_score_cv):
-            self.logistic_regression_accuracy_cv['agreeableness'] = (sum(agreeableness_score_cv) / len(agreeableness_score_cv))
-        if len(neuroticism_score_cv):
-            self.logistic_regression_accuracy_cv['neuroticism'] = (sum(neuroticism_score_cv) / len(neuroticism_score_cv))
 
     def _cross_validation_implementation(self, _regr, _X, _y, y_feature):
         acc_arr = list()
@@ -1404,7 +1322,7 @@ class CalculateScore:
             y_train, y_test = _y.iloc[train_index], _y.iloc[test_index]
 
             # create textual features
-            X_train, X_test = self._append_textual_features(X_train, X_test)
+            X_train, X_test, f_names = self._append_textual_features(X_train, X_test)
 
             # implement normalization
             if True:
@@ -1418,7 +1336,7 @@ class CalculateScore:
 
             # select K best
             if self.k_best_feature_flag:
-                X_train, X_test, k_feature = self._select_k_best_feature(X_train, y_train, X_test, list(_X))
+                X_train, X_test, k_feature = self._select_k_best_feature(X_train, y_train, X_test, f_names)
 
             Logger.info('Classifier input train: {} test: {}'.format(X_train.shape, X_test.shape))
             _regr.fit(X_train, y_train)
@@ -1431,7 +1349,7 @@ class CalculateScore:
             acc_arr.append(cur_acc)
             auc_arr.append(cur_auc)
 
-            try:
+            """try:
                 self._eli5_explain_weights(
                     _regr,
                     f_names=[x.encode('utf-8') for x in k_feature],
@@ -1440,6 +1358,7 @@ class CalculateScore:
                 )
             except Exception:
                 Logger.info('Exception during eli5')
+            """
 
         return acc_arr, auc_arr
 

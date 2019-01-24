@@ -141,27 +141,6 @@ class Wrapper:
         if not os.path.exists(self.dir_analyze_name):
             os.makedirs(self.dir_analyze_name)
 
-        # "regular" accuracy results
-        self.openness_score_list = list()
-        self.conscientiousness_score_list = list()
-        self.extraversion_score_list = list()
-        self.agreeableness_score_list = list()
-        self.neuroticism_score_list = list()
-
-        # CV results
-        self.openness_cv_score_list = list()
-        self.conscientiousness_cv_score_list = list()
-        self.extraversion_cv_score_list = list()
-        self.agreeableness_cv_score_list = list()
-        self.neuroticism_cv_score_list = list()
-
-        # ROC results
-        self.openness_score_roc_list = list()
-        self.conscientiousness_score_roc_list = list()
-        self.extraversion_score_roc_list = list()
-        self.agreeableness_score_roc_list = list()
-        self.neuroticism_score_roc_list = list()
-
         """self.result_df = pd.DataFrame(columns=[
             'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit', 'regularization_type', 'C',
             'threshold', 'k_features', 'xgb_c', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
@@ -172,7 +151,7 @@ class Wrapper:
             'method', 'classifier', 'CV_bool', 'user_type', 'l_limit', 'h_limit',
             'threshold', 'k_features', 'k_flag', 'penalty', 'xgb_gamma', 'xgb_eta', 'xgb_max_depth', 'trait', 'test_accuracy', 'auc',
             'accuracy_k_fold', 'auc_k_fold', 'train_accuracy', 'data_size', 'majority_ratio', 'features',
-            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree', 'emb_dim', 'emb_limit', 'emb_type'
+            'xgb_n_estimators', 'xgb_subsample', 'xgb_colsample_bytree', 'emb_dim', 'emb_limit', 'emb_type', 'vec_type', 'vec_max_feature'
         ])
 
         self.max_score = {
@@ -224,6 +203,9 @@ class Wrapper:
         if self.classifier_type == 'xgb' and not self.split_bool:
             raise ValueError('currently we do not support cross validation for XGB model')
 
+        if bfi_config.feature_data_set['categ_threshold'] not in [0, 250, 500]:
+            raise ValueError('categ purchase threshold not in list [0, 250, 500]')
+
     # log class arguments
     def log_attribute_input(self):
 
@@ -272,27 +254,6 @@ class Wrapper:
                 for xgb_c in self.xgb_c:
                     for xgb_eta in self.xgb_eta:
                         for xgb_max_depth in self.xgb_max_depth:
-
-                            # reset evaluation list.
-                            # list target is to compare between configurations with same K_best and penalty
-                            self.openness_score_list = list()
-                            self.conscientiousness_score_list = list()
-                            self.extraversion_score_list = list()
-                            self.agreeableness_score_list = list()
-                            self.neuroticism_score_list = list()
-
-                            self.openness_score_roc_list = list()
-                            self.conscientiousness_score_roc_list = list()
-                            self.extraversion_score_roc_list = list()
-                            self.agreeableness_score_roc_list = list()
-                            self.neuroticism_score_roc_list = list()
-
-                            self.openness_cv_score_list = list()
-                            self.conscientiousness_cv_score_list = list()
-                            self.extraversion_cv_score_list = list()
-                            self.agreeableness_cv_score_list = list()
-                            self.neuroticism_cv_score_list = list()
-
                             for threshold_purchase in self.threshold_list:
 
                                 self.threshold_purchase = threshold_purchase
@@ -314,33 +275,6 @@ class Wrapper:
                                 # insert current model result
                                 self._store_data_df(calculate_obj.models_results)
 
-                                # store result correspond to whether we split data or not
-                                if self.split_test:
-                                    # test score
-                                    self.openness_score_list.append(calculate_obj.logistic_regression_accuracy['openness'])
-                                    self.conscientiousness_score_list.append(calculate_obj.logistic_regression_accuracy['conscientiousness'])
-                                    self.extraversion_score_list.append(calculate_obj.logistic_regression_accuracy['extraversion'])
-                                    self.agreeableness_score_list.append(calculate_obj.logistic_regression_accuracy['agreeableness'])
-                                    self.neuroticism_score_list.append(calculate_obj.logistic_regression_accuracy['neuroticism'])
-
-                                    # roc score
-                                    self.openness_score_roc_list.append(calculate_obj.logistic_regression_roc['openness'])
-                                    self.conscientiousness_score_roc_list.append(calculate_obj.logistic_regression_roc['conscientiousness'])
-                                    self.extraversion_score_roc_list.append(calculate_obj.logistic_regression_roc['extraversion'])
-                                    self.agreeableness_score_roc_list.append(calculate_obj.logistic_regression_roc['agreeableness'])
-                                    self.neuroticism_score_roc_list.append(calculate_obj.logistic_regression_roc['neuroticism'])
-
-                                # CV score
-                                self.openness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['openness'])
-                                self.conscientiousness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['conscientiousness'])
-                                self.extraversion_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['extraversion'])
-                                self.agreeableness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['agreeableness'])
-                                self.neuroticism_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['neuroticism'])
-
-                # plot results
-                # if we split test+train we present test score + ROC curve
-                # else we only present CV score without TODO ROC curve
-                
         self._save_result_df()
         self._save_to_ablation_csv()
 
@@ -384,33 +318,6 @@ class Wrapper:
 
                     # cur_key = 'C_' + str(cur_C) + '_Penalty_' + str(cur_penalty) + '_Threshold_' + str(threshold_purchase)
                     cur_key = '_Penalty_' + str(cur_penalty) + '_Threshold_' + str(threshold_purchase)
-
-
-                    # mae score
-                    self.openness_score_mae_list.append(calculate_obj.linear_regression_mae['openness'])
-                    self.conscientiousness_score_mae_list.append(calculate_obj.linear_regression_mae['conscientiousness'])
-                    self.extraversion_score_mae_list.append(calculate_obj.linear_regression_mae['extraversion'])
-                    self.agreeableness_score_mae_list.append(calculate_obj.linear_regression_mae['agreeableness'])
-                    self.neuroticism_score_mae_list.append(calculate_obj.linear_regression_mae['neuroticism'])
-
-                    # pearson score
-                    self.openness_score_pearson_list.append(calculate_obj.linear_regression_pearson['openness'])
-                    self.conscientiousness_score_pearson_list.append(calculate_obj.linear_regression_pearson['conscientiousness'])
-                    self.extraversion_score_pearson_list.append(calculate_obj.linear_regression_pearson['extraversion'])
-                    self.agreeableness_score_pearson_list.append(calculate_obj.linear_regression_pearson['agreeableness'])
-                    self.neuroticism_score_pearson_list.append(calculate_obj.linear_regression_pearson['neuroticism'])
-
-                    '''# CV score
-                    self.openness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['openness'])
-                    self.conscientiousness_cv_score_list.append(
-                        calculate_obj.logistic_regression_accuracy_cv['conscientiousness'])
-                    self.extraversion_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['extraversion'])
-                    self.agreeableness_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['agreeableness'])
-                    self.neuroticism_cv_score_list.append(calculate_obj.logistic_regression_accuracy_cv['neuroticism'])'''
-
-
-                self.plot_traits_mae_versus_threshold_linear(cur_penalty, k_best)
-                self.plot_traits_pearson_versus_threshold_linear(cur_penalty, k_best)
 
     # run experiments for a giving arguments
     def run_experiments(self, xgb_c, xgb_eta, xgb_max_depth):
@@ -505,7 +412,9 @@ class Wrapper:
                 'xgb_colsample_bytree': row['xgb_colsample_bytree'],
                 'emb_dim': bfi_config.predict_trait_configs['embedding_dim'],
                 'emb_limit': bfi_config.predict_trait_configs['embedding_limit'],
-                'emb_type': bfi_config.predict_trait_configs['embedding_type']
+                'emb_type': bfi_config.predict_trait_configs['embedding_type'],
+                'vec_type': bfi_config.predict_trait_configs['dict_vec']['vec_type'],
+                'vec_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features']
             }
 
             cur_configs_five.append(config_result_dict)
@@ -603,7 +512,8 @@ class Wrapper:
                     'k_flag': self.k_best_feature_flag,
                     'vectorizer_type': bfi_config.predict_trait_configs['dict_vec']['vec_type'],
                     'emb_type': bfi_config.predict_trait_configs['embedding_type'],
-                    'emb_dim': bfi_config.predict_trait_configs['embedding_dim']
+                    'emb_dim': bfi_config.predict_trait_configs['embedding_dim'],
+                    'vectorizer_max_feature': bfi_config.predict_trait_configs['dict_vec']['max_features']
                 }
             d_ablation = pd.read_csv(result_df_path)
 
@@ -639,306 +549,6 @@ class Wrapper:
 
         except Exception:
             Logger.info('Exception during insertion to ablation test')
-        return
-
-    ############################# visualization functions #############################
-
-    # plot traits accuracy versus - logistic
-    def plot_traits_accuracy_versus_threshold(self, cur_penalty, k_best):
-
-        import matplotlib.pyplot as plt
-
-        try:
-            # fig = plt.figure()
-            # ax = fig.add_subplot(2, 2, 1)
-
-            plt.figure(figsize=(10, 6))
-            plt.plot(self.threshold_list, self.openness_score_list, '.r-', label='openness')
-            plt.plot(self.threshold_list, self.openness_cv_score_list, '.r:', label='openness CV')
-
-            plt.plot(self.threshold_list, self.conscientiousness_score_list, '.b-', label='conscientiousness')
-            plt.plot(self.threshold_list, self.conscientiousness_cv_score_list, '.b:', label='conscientiousness CV')
-
-            plt.plot(self.threshold_list, self.extraversion_score_list, '.g-', label='extraversion')
-            plt.plot(self.threshold_list, self.extraversion_cv_score_list, '.g:', label='extraversion CV')
-
-            plt.plot(self.threshold_list, self.agreeableness_score_list, '.m-', label='agreeableness')
-            plt.plot(self.threshold_list, self.agreeableness_cv_score_list, '.m:', label='agreeableness CV')
-
-            plt.plot(self.threshold_list, self.neuroticism_score_list, '.c-', label='neuroticism')
-            plt.plot(self.threshold_list, self.neuroticism_cv_score_list, '.c:', label='neuroticism CV')
-
-            max_open = max(max(self.openness_score_list),
-                           max(self.conscientiousness_score_list),
-                           max(self.extraversion_score_list),
-                           max(self.agreeableness_score_list),
-                           max(self.neuroticism_score_list))
-
-            plt.legend(loc='upper left')
-
-            # plt.title('traits test accuracy vs. amount purchase threshold')
-            title = 'traits test accuracy vs. amount purchase threshold \n'
-            title += ' Max: ' + str(round(max_open, 2)) + ' # features: ' + str(k_best) + ' Penalty: ' + str(cur_penalty)\
-                     + ' Gap:' + str(self.h_limit) + '-' + str(self.l_limit)
-
-            plt.title(title)
-            plt.ylabel('Test accuracy')
-            plt.xlabel('Threshold purchase amount')
-            # plt.ylim(0.4, 1)
-            # plot_name = cur_directory + 'logistic_C=' + str(cur_C) + '_penalty=' \
-            #             + str(cur_penalty) + '_max=' + str(round(max_open, 2)) + '_gap=' + str(
-            #     bool_slice_gap_percentile) + '_norm=' + str(bool_normalize_features) + '.png'
-            plot_name = str(round(max_open, 2)) + '_Accuracy_k=' + str(k_best) + '_penalty=' + str(cur_penalty) + '_gap=' + str(
-                self.h_limit) + '_' + str(self.l_limit) + '_max=' + str(round(max_open, 2)) + '.png'
-
-            plot_path = self.plot_directory + plot_name
-            plt.savefig(plot_path, bbox_inches='tight')
-            # plt.show()
-            plt.close()
-            Logger.info('save plot: ' + str(plot_path))
-
-        except Exception, e:
-            print('found problem')
-            print('Failed massage: ' + str(e))
-            print(Exception)
-            pass
-
-        return
-
-    # plot traits accuracy versus - logistic
-    def plot_traits_accuracy_versus_threshold_CV(self, cur_penalty, k_best):
-
-        import matplotlib.pyplot as plt
-
-        try:
-            # fig = plt.figure()
-            # ax = fig.add_subplot(2, 2, 1)
-
-            plt.figure(figsize=(10, 6))
-            # plt.plot(self.threshold_list, self.openness_score_list, '.r-', label='openness')
-            plt.plot(self.threshold_list, self.openness_cv_score_list, '.r:', label='openness CV')
-
-            # plt.plot(self.threshold_list, self.conscientiousness_score_list, '.b-', label='conscientiousness')
-            plt.plot(self.threshold_list, self.conscientiousness_cv_score_list, '.b:', label='conscientiousness CV')
-
-            # plt.plot(self.threshold_list, self.extraversion_score_list, '.g-', label='extraversion')
-            plt.plot(self.threshold_list, self.extraversion_cv_score_list, '.g:', label='extraversion CV')
-
-            # plt.plot(self.threshold_list, self.agreeableness_score_list, '.m-', label='agreeableness')
-            plt.plot(self.threshold_list, self.agreeableness_cv_score_list, '.m:', label='agreeableness CV')
-
-            # plt.plot(self.threshold_list, self.neuroticism_score_list, '.c-', label='neuroticism')
-            plt.plot(self.threshold_list, self.neuroticism_cv_score_list, '.c:', label='neuroticism CV')
-
-            max_open = max(max(self.openness_cv_score_list),
-                           max(self.conscientiousness_cv_score_list),
-                           max(self.extraversion_cv_score_list),
-                           max(self.agreeableness_cv_score_list),
-                           max(self.neuroticism_cv_score_list))
-
-            plt.legend(loc='upper left')
-
-            # plt.title('traits test accuracy vs. amount purchase threshold')
-            title = 'traits CV accuracy vs. amount purchase threshold \n'
-            title += ' Max: ' + str(round(max_open, 2)) + ' # features: ' + str(k_best) + ' Penalty: ' + str(cur_penalty)\
-                     + ' Gap:' + str(self.h_limit) + '-' + str(self.l_limit)
-
-            plt.title(title)
-            plt.ylabel('Test accuracy')
-            plt.xlabel('Threshold purchase amount')
-            # plt.ylim(0.4, 1)
-            # plot_name = cur_directory + 'logistic_C=' + str(cur_C) + '_penalty=' \
-            #             + str(cur_penalty) + '_max=' + str(round(max_open, 2)) + '_gap=' + str(
-            #     bool_slice_gap_percentile) + '_norm=' + str(bool_normalize_features) + '.png'
-            plot_name = str(round(max_open, 2)) + '_CV_Accuracy_k=' + str(k_best) + '_penalty=' + str(cur_penalty) + '_gap=' + str(
-                self.h_limit) + '_' + str(self.l_limit) + '_max=' + str(round(max_open, 2)) + '.png'
-
-            plot_path = self.plot_directory + plot_name
-            plt.savefig(plot_path, bbox_inches='tight')
-            # plt.show()
-            plt.close()
-            Logger.info('save plot: ' + str(plot_path))
-
-        except Exception, e:
-            print('found problem')
-            print('Failed massage: ' + str(e))
-            print(Exception)
-            pass
-
-        return
-
-    # plot traits accuracy versus - logistic
-    def plot_traits_roc_versus_threshold(self, cur_penalty, k_best):
-
-        import matplotlib.pyplot as plt
-
-        try:
-            # fig = plt.figure()
-            # ax = fig.add_subplot(2, 2, 1)
-
-            plt.figure(figsize=(10, 6))
-            plt.plot(self.threshold_list, self.openness_score_roc_list, '.r-', label='openness')
-            # plt.plot(self.threshold_list, self.openness_cv_score_list, '.r:', label='openness CV')
-
-            plt.plot(self.threshold_list, self.conscientiousness_score_roc_list, '.b-', label='conscientiousness')
-            # plt.plot(self.threshold_list, self.conscientiousness_cv_score_list, '.b:', label='conscientiousness CV')
-
-            plt.plot(self.threshold_list, self.extraversion_score_roc_list, '.g-', label='extraversion')
-            # plt.plot(self.threshold_list, self.extraversion_cv_score_list, '.g:', label='extraversion CV')
-
-            plt.plot(self.threshold_list, self.agreeableness_score_roc_list, '.m-', label='agreeableness')
-            # plt.plot(self.threshold_list, self.agreeableness_cv_score_list, '.m:', label='agreeableness CV')
-
-            plt.plot(self.threshold_list, self.neuroticism_score_list, '.c-', label='neuroticism')
-            # plt.plot(self.threshold_list, self.neuroticism_cv_score_list, '.c:', label='neuroticism CV')
-
-            max_open = max(max(self.openness_score_roc_list),
-                           max(self.conscientiousness_score_roc_list),
-                           max(self.extraversion_score_roc_list),
-                           max(self.agreeableness_score_roc_list),
-                           max(self.neuroticism_score_roc_list))
-
-            plt.legend(loc='upper left')
-
-            # plt.title('traits test accuracy vs. amount purchase threshold')
-            title = 'traits test ROC score vs. amount purchase threshold \n'
-            title += ' Max: ' + str(round(max_open, 2)) + ' # features: ' + str(k_best) + ' Penalty: ' + str(
-                cur_penalty) \
-                     + ' Gap:' + str(self.h_limit) + '-' + str(self.l_limit)
-
-            plt.title(title)
-            plt.ylabel('ROC Test score')
-            plt.xlabel('Threshold purchase amount')
-            # plt.ylim(0.4, 1)
-            # plot_name = cur_directory + 'logistic_C=' + str(cur_C) + '_penalty=' \
-            #             + str(cur_penalty) + '_max=' + str(round(max_open, 2)) + '_gap=' + str(
-            #     bool_slice_gap_percentile) + '_norm=' + str(bool_normalize_features) + '.png'
-            plot_name = str(round(max_open, 2)) + '_ROC_k=' + str(k_best) + '_penalty=' + str(
-                cur_penalty) + '_gap=' + str(
-                self.h_limit) + '_' + str(self.l_limit) + '_max=' + str(round(max_open, 2)) + '.png'
-
-            plot_path = self.plot_directory + plot_name
-            plt.savefig(plot_path, bbox_inches='tight')
-            # plt.show()
-            plt.close()
-            Logger.info('save plot: ' + str(plot_path))
-
-        except Exception, e:
-            print('found problem')
-            print('Failed massage: ' + str(e))
-            print(Exception)
-            pass
-
-        return
-
-    # plot results - linear regression TODO
-    def plot_traits_mae_versus_threshold_linear(self, cur_penalty, k_best):
-
-        import matplotlib.pyplot as plt
-        try:
-
-            plt.figure(figsize=(10, 6))
-            # plt.plot(self.threshold_list, self.openness_score_list, '.r-', label='openness')
-            plt.plot(self.threshold_list, self.openness_score_mae_list, '.r:', label='openness mae')
-
-            # plt.plot(self.threshold_list, self.conscientiousness_score_list, '.b-', label='conscientiousness')
-            plt.plot(self.threshold_list, self.conscientiousness_score_mae_list, '.b:', label='conscientiousness mae')
-
-            # plt.plot(self.threshold_list, self.extraversion_score_list, '.g-', label='extraversion')
-            plt.plot(self.threshold_list, self.extraversion_score_mae_list, '.g:', label='extraversion mae')
-
-            # plt.plot(self.threshold_list, self.agreeableness_score_list, '.m-', label='agreeableness')
-            plt.plot(self.threshold_list, self.agreeableness_score_mae_list, '.m:', label='agreeableness mae')
-
-            # plt.plot(self.threshold_list, self.neuroticism_score_list, '.c-', label='neuroticism')
-            plt.plot(self.threshold_list, self.neuroticism_score_mae_list, '.c:', label='neuroticism mae')
-
-            min_mae = min(min(self.openness_score_mae_list),
-                          min(self.conscientiousness_score_mae_list),
-                          min(self.extraversion_score_mae_list),
-                          min(self.agreeableness_score_mae_list),
-                          min(self.neuroticism_score_mae_list))
-
-            plt.legend(loc='upper left')
-
-            # plt.title('traits test accuracy vs. amount purchase threshold')
-            title = 'personalty traits MAE vs. amount purchase threshold \n'
-            title += ' Min MAE: ' + str(round(min_mae, 2)) + ' # features: ' + str(k_best) + ' Penalty: ' + str(cur_penalty)
-
-
-            plt.title(title)
-            plt.ylabel('Test accuracy')
-            plt.xlabel('Threshold purchase amount')
-            plot_name = str(round(min_mae, 2)) + '_MAE_k=' + str(k_best) + '_penalty=' + str(cur_penalty) + '_min_mae=' + str(round(min_mae, 2)) + '.png'
-
-            plot_path = self.plot_directory + plot_name
-            plt.savefig(plot_path, bbox_inches='tight')
-            # plt.show()
-            plt.close()
-            Logger.info('min MAE: ' + str(round(min_mae, 3)))
-            Logger.info('save plot: ' + str(plot_path))
-
-
-        except Exception, e:
-            print('found problem')
-            print('Failed massage: ' + str(e))
-            print(Exception)
-            pass
-        return
-
-    # plot results - linear regression TODO
-    def plot_traits_pearson_versus_threshold_linear(self, cur_penalty, k_best):
-
-        import matplotlib.pyplot as plt
-        try:
-
-            plt.figure(figsize=(10, 6))
-            # plt.plot(self.threshold_list, self.openness_score_list, '.r-', label='openness')
-            plt.plot(self.threshold_list, self.openness_score_pearson_list, '.r:', label='openness pearson')
-
-            # plt.plot(self.threshold_list, self.conscientiousness_score_list, '.b-', label='conscientiousness')
-            plt.plot(self.threshold_list, self.conscientiousness_score_pearson_list, '.b:', label='conscientiousness pearson')
-
-            # plt.plot(self.threshold_list, self.extraversion_score_list, '.g-', label='extraversion')
-            plt.plot(self.threshold_list, self.extraversion_score_pearson_list, '.g:', label='extraversion pearson')
-
-            # plt.plot(self.threshold_list, self.agreeableness_score_list, '.m-', label='agreeableness')
-            plt.plot(self.threshold_list, self.agreeableness_score_pearson_list, '.m:', label='agreeableness pearson')
-
-            # plt.plot(self.threshold_list, self.neuroticism_score_list, '.c-', label='neuroticism')
-            plt.plot(self.threshold_list, self.neuroticism_score_pearson_list, '.c:', label='neuroticism pearson')
-
-            max_p = max(max(self.openness_score_pearson_list),
-                          max(self.conscientiousness_score_pearson_list),
-                          max(self.extraversion_score_pearson_list),
-                          max(self.agreeableness_score_pearson_list),
-                          max(self.neuroticism_score_pearson_list))
-
-            plt.legend(loc='upper left')
-
-            # plt.title('traits test accuracy vs. amount purchase threshold')
-            title = 'personalty traits Pearson vs. amount purchase threshold \n'
-            title += ' max Pearson: ' + str(round(max_p, 3)) + ' # features: ' + str(k_best) + ' Penalty: ' + str(
-                cur_penalty)
-
-            plt.title(title)
-            plt.ylabel('Pearson correlation')
-            plt.xlabel('Threshold purchase amount')
-            plot_name = str(round(max_p, 3)) + '_Pearson_k=' + str(k_best) + '_penalty=' + str(
-                cur_penalty) + '_max_pearson=' + str(round(max_p, 2)) + '.png'
-
-            plot_path = self.plot_directory + plot_name
-            plt.savefig(plot_path, bbox_inches='tight')
-            # plt.show()
-            plt.close()
-            Logger.info('max pearson: ' + str(round(max_p, 3)))
-            Logger.info('save plot: ' + str(plot_path))
-
-        except Exception, e:
-            print('found problem')
-            print('Failed massage: ' + str(e))
-            print(Exception)
-            pass
         return
 
 

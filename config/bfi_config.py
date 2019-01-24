@@ -60,24 +60,24 @@ predict_trait_configs = {
     'bool_slice_gap_percentile': True,
     'split_bool': True,
 
+    'k_rand': [199, 200],
 
     'l_limit': 0.3,
     'h_limit': 0.7,
-
     'num_splits': 5,
-    'k_best_feature_flag': True,
-    'k_rand': [199, 200],
 
-    'k_best_list': [50, 100, 200],
-    'classifier_type': 'xgb',                          # 'xgb',
+
+    'k_best_feature_flag': True,
+    'k_best_list': [100, 25, 300],
+    'classifier_type': 'xgb',                          # 'xgb', lr
     'user_type': 'all',                                 # 'cf', 'all'
-    'threshold_list': [30, 40],     # 20               # select 0 to save all users (on predefined df)
+    'threshold_list': [40, 30, 20],     # 20               # select 0 to save all users (on predefined df)
     'penalty': ['l1'],
     'C': 1,
     # 'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 600, 500, 400, 300, 200, 50, 30, 17, 15, 14, 12, 10, 8, 6, 1000],
     'xgb_c': [0.1, 1, 5],
-    'xgb_eta': [0.3, 0.01],          # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
-    'xgb_max_depth': [3, 5],       #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
+    'xgb_eta': [0.3, 0.01],    # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
+    'xgb_max_depth': [2, 3, 5],  # , 5     #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
 
     """
     'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 50, 30, 15, 10, 8],
@@ -92,7 +92,7 @@ predict_trait_configs = {
     'min_df': 60,
     'max_textual_features': 100,
 
-    'embedding_dim': 100,
+    'embedding_dim': 200,
     'embedding_limit': 100000,
     'embedding_type': 'glove',   # 'glove'-50,100,200,300 'ft_amazon'-300
 
@@ -106,8 +106,8 @@ predict_trait_configs = {
         'missing_val': 'avg_idf',    # 'max_idf', 'avg_idf', 'zero' - relevant in embedding
         # 'vec_type': 'vec_tfidf_embeds'        # by pertrained embddeing dim
         # 'vec_type': 'vec_count'               # by 'dict_vec'['max_features']
-        # 'vec_type': 'vec_tfidf'                 # by 'dict_vec'['max_features']
-        # 'vec_type': 'vec_avg_embds'           # by pertrained embddeing dim
+        # 'vec_type': 'vec_tfidf'               # by 'dict_vec'['max_features']
+        # 'vec_type': 'vec_avg_embds'             # by pertrained embddeing dim
         'vec_type': 'vec_tfidf_embeds'
     },
     # 'ft_amazon', 300, 200000
@@ -150,6 +150,7 @@ feature_data_set = {
             'Electronics_ratio', 'Fashion_ratio', 'Home & Garden_ratio', 'Collectibles_ratio','Lifestyle_ratio',
             'Parts & Accessories_ratio', 'Business & Industrial_ratio', 'Media_ratio'],
 
+        'categ_threshold': 0,
         'meta_category_feature': [
             'Collectibles',
              'Crafts',
