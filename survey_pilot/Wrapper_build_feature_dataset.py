@@ -256,7 +256,7 @@ class Wrapper:
     def wrapper_experiments_logistic(self):
 
         self.num_experiments = len(self.penalty)*len(self.k_best_list)*len(self.xgb_c)*len(self.xgb_eta)*\
-                               len(self.xgb_max_depth)*len(self.threshold_list)*5     # number of traits
+                               len(self.xgb_max_depth)*len(self.threshold_list)*len(bfi_config.feature_data_set['lr_y_logistic_feature'])  # number of traits
 
         for cur_penalty in self.penalty:
             for k_best in self.k_best_list:
@@ -462,12 +462,24 @@ class Wrapper:
         result_df_path = os.path.join(self.dir_logistic_results, 'compare_models')
         if not os.path.exists(result_df_path):
             os.makedirs(result_df_path)
+        list_e = self.result_df.loc[self.result_df['trait'] == 'extraversion']['auc']
+        list_o = self.result_df.loc[self.result_df['trait'] == 'openness']['auc']
+        list_a = self.result_df.loc[self.result_df['trait'] == 'agreeableness']['auc']
+        list_n = self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']
+        list_c = self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']
 
+        e = round(max(list_e), 2) if list_e.tolist() else 0
+        o = round(max(list_o), 2) if list_o.tolist() else 0
+        a = round(max(list_a), 2) if list_a.tolist() else 0
+        n = round(max(list_n), 2) if list_n.tolist() else 0
+        c = round(max(list_c), 2) if list_c.tolist() else 0
+        """
         e = round(max(self.result_df.loc[self.result_df['trait'] == 'extraversion']['auc']), 2)
         o = round(max(self.result_df.loc[self.result_df['trait'] == 'openness']['auc']), 2)
         a = round(max(self.result_df.loc[self.result_df['trait'] == 'agreeableness']['auc']), 2)
         n = round(max(self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']), 2)
         c = round(max(self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']), 2)
+        """
         best_acc = max(o, c, e, a, n)
         num_splits = bfi_config.predict_trait_configs['num_splits']
         title_features = bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag']
@@ -493,11 +505,25 @@ class Wrapper:
                 os.makedirs(result_df_path)
             result_df_path = os.path.join(result_df_path, '{}.csv'.format('ablation'))
 
+            list_e = self.result_df.loc[self.result_df['trait'] == 'extraversion']['auc']
+            list_o = self.result_df.loc[self.result_df['trait'] == 'openness']['auc']
+            list_a = self.result_df.loc[self.result_df['trait'] == 'agreeableness']['auc']
+            list_n = self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']
+            list_c = self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']
+
+            e = round(max(list_e), 2) if list_e.tolist() else 0
+            o = round(max(list_o), 2) if list_o.tolist() else 0
+            a = round(max(list_a), 2) if list_a.tolist() else 0
+            n = round(max(list_n), 2) if list_n.tolist() else 0
+            c = round(max(list_c), 2) if list_c.tolist() else 0
+            """
+            changed because we want to examine sometimes only few traits (and the series will be empty - exception due to max())
             o = round(max(self.result_df.loc[self.result_df['trait'] == 'openness']['auc']), 2)
             c = round(max(self.result_df.loc[self.result_df['trait'] == 'conscientiousness']['auc']), 2)
             e = round(max(self.result_df.loc[self.result_df['trait'] == 'extraversion']['auc']), 2)
             a = round(max(self.result_df.loc[self.result_df['trait'] == 'agreeableness']['auc']), 2)
             n = round(max(self.result_df.loc[self.result_df['trait'] == 'neuroticism']['auc']), 2)
+            """
 
             import csv
             dict_val = {
@@ -563,10 +589,11 @@ class Wrapper:
                           'l_limit',
                           'h_limit']
                           """
+            Logger.info('group bool flags:')
+            Logger.info(dict_feature_flag)
 
         except Exception:
             Logger.info('Exception during insertion to ablation test')
-        return
 
 
 def main():

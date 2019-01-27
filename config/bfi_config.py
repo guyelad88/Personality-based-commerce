@@ -12,15 +12,16 @@ predict_trait_configs = {
     'description_corpus': '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/descriptions_corpus_438.csv',
 
     'dict_feature_flag': {
-        'time_purchase_ratio_feature_flag': False,
-        'time_purchase_meta_feature_flag': False,
-        'vertical_ratio_feature_flag': False,
-        'meta_category_feature_flag': False,
-        'purchase_percentile_feature_flag': False,
-        'user_meta_feature_flag': False,
-        'title_feature_flag': False,
+        'purchase_percentile_feature_flag': True,
+        'time_purchase_ratio_feature_flag': True,
+        'time_purchase_meta_feature_flag': True,
+        'user_meta_feature_flag': True,
+        'vertical_ratio_feature_flag': True,
+        'meta_category_feature_flag': True,
 
-        'descriptions_feature_flag': True,
+        'title_feature_flag': True,
+
+        'descriptions_feature_flag': False,
 
         'aspect_feature_flag': False
     },
@@ -41,49 +42,42 @@ predict_trait_configs = {
     'num_splits': 5,
 
     'k_best_feature_flag': True,
-    'k_best_list': [100, 200, 50],  # [100, 200, 50],  # [100, 50, 300], [30, 15, 10]
+    'k_best_list': [100, 50, 150],  # [100, 200, 50],  # [100, 50, 300], [30, 15, 10]
     'classifier_type': 'xgb',                          # 'xgb', lr
     'user_type': 'all',                                 # 'cf', 'all'
-    'threshold_list': [40, 20, 30],  # 20               # select 0 to save all users (on predefined df)
+    'threshold_list': [5, 10, 15],  # 20               # select 0 to save all users (on predefined df)
     'penalty': ['l1'],
     'C': 1,
     # 'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 600, 500, 400, 300, 200, 50, 30, 17, 15, 14, 12, 10, 8, 6, 1000],
-    'xgb_c': [1, 0.1, 5],  # [0.1, 1, 5],
-    'xgb_eta': [0.1, 0.3],     # [0.3, 0.01],    # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
-    'xgb_max_depth': [3, 5],  # , 5     #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
-
-    """
-    'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 50, 30, 15, 10, 8],
-    'xgb_eta': [1, 3, 0.3, 0.01, 0.001],          # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
-    'xgb_max_depth': [2, 3, 5, 7],       #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
-    """
+    'xgb_c': [0.1, 1],  # [0.1, 1, 5],
+    'xgb_eta': [0.1],     # [0.3, 0.01],    # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
+    'xgb_max_depth': [5],  # , 5     #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
 
     'xgb_n_estimators': 500,                # un-relevant - randomize value during inside
-    'xgb_subsample': 1,                     # un-relevant - randomize value during inside
-    'xgb_colsample_bytree': 1,               # un-relevant - randomize value during inside
+    'xgb_subsample': 0.8,                     # un-relevant - randomize value during inside
+    'xgb_colsample_bytree': 0.85,               # un-relevant - randomize value during inside
 
     'min_df': 60,
     'max_textual_features': 300,
 
-    'embedding_dim': 50,
+    'embedding_dim': 300,
     'embedding_limit': 100000,
-    'embedding_type': 'glove',          # 'glove'-50,100,200,300    'ft_amazon'-300
+    'embedding_type': 'fasttext',          # 'glove': 50,100,200,300 'ft_amazon': 300, fasttext: 300
 
     'dict_vec': {
-        'max_features': 2000,                   # 30000 number of added features
+        'max_features': 1000,                   # 30000 number of added features
         'ngram_range': [1, 2],
         'stop_words': 'english',
         'min_df': 3,
-        'max_df': 0.3,
+        'max_df': 0.15,
         'norm': 'l2',
         'missing_val': 'max_idf',               # 'max_idf', 'avg_idf', 'zero' - relevant in embedding
+        'vec_type': 'vec_tfidf_embeds'
         # 'vec_type': 'vec_tfidf_embeds'        # by pertrained embddeing dim
         # 'vec_type': 'vec_count'               # by 'dict_vec'['max_features']
-        # 'vec_type': 'vec_tfidf'               # by 'dict_vec'['max_features']
-        # 'vec_type': 'vec_avg_embds'             # by pertrained embddeing dim
-        'vec_type': 'vec_tfidf_embeds'
+        # 'vec_type': 'vec_avg_embds'               # by 'dict_vec'['max_features']
+        # 'vec_type': 'vec_avg_embds'           # by pertrained embddeing dim
     },
-    # 'ft_amazon', 300, 200000
 }
 
 bfi_test_information = {
@@ -97,6 +91,11 @@ bfi_test_information = {
 black_list = ['123ebay','1768064','9285414','h_vivic_vpxwxxtjql','l0rd0ct0d0rk','pug.the.wizard','normality_is_an_illusion','fms*play','mortalis_123','mysss123','redzeb123']
 
 feature_data_set = {
+
+        'lr_y_logistic_feature': ['extraversion_group', 'neuroticism_group'],
+        # all
+        # 'lr_y_logistic_feature': ['openness_group', 'conscientiousness_group', 'extraversion_group','agreeableness_group', 'neuroticism_group'],
+
         'pearson_relevant_feature': ['Age', 'openness_percentile',
                    'conscientiousness_percentile', 'extraversion_percentile', 'agreeableness_percentile',
                    'neuroticism_percentile', 'number_purchase', 'Electronics_ratio', 'Fashion_ratio',
@@ -104,7 +103,6 @@ feature_data_set = {
                    'Business & Industrial_ratio', 'Media_ratio'],
 
         'lr_y_feature': ['agreeableness_trait', 'extraversion_trait', 'neuroticism_trait', 'conscientiousness_trait', 'openness_trait'],
-        'lr_y_logistic_feature': ['openness_group', 'conscientiousness_group', 'extraversion_group','agreeableness_group', 'neuroticism_group'],
         'lr_y_linear_feature': ['openness_group', 'conscientiousness_group', 'extraversion_group', 'agreeableness_group', 'neuroticism_group'],
         'trait_percentile': ['openness_percentile', 'conscientiousness_percentile', 'extraversion_percentile', 'agreeableness_percentile', 'neuroticism_percentile'],
 

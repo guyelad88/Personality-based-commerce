@@ -120,9 +120,17 @@ class CalculateScore:
         self.xgb_c = xgb_c
         self.xgb_eta = xgb_eta
         self.xgb_max_depth = xgb_max_depth
-        self.xgb_n_estimators = random.randint(300, 1000)
-        self.xgb_subsample = round(random.uniform(0.6, 1), 2)
-        self.xgb_colsample_bytree = round(random.uniform(0.6, 1), 2)
+        # self.xgb_n_estimators = bfi_config.predict_trait_configs['xgb_n_estimators']            # random.randint(300, 1000)
+        # self.xgb_subsample = bfi_config.predict_trait_configs['xgb_subsample']              # round(random.uniform(0.6, 1), 2)
+        # self.xgb_colsample_bytree = bfi_config.predict_trait_configs['xgb_colsample_bytree']       # round(random.uniform(0.6, 1), 2)
+
+        # self.xgb_n_estimators = random.randint(300, 1000)
+        # self.xgb_subsample = round(random.uniform(0.6, 1), 2)
+        # self.xgb_colsample_bytree = round(random.uniform(0.6, 1), 2)
+
+        self.xgb_n_estimators = random.randint(400, 600)
+        self.xgb_subsample = round(random.uniform(0.7, 0.8), 2)
+        self.xgb_colsample_bytree = round(random.uniform(0.6, 0.7), 2)
 
         self.n_splits = bfi_config.predict_trait_configs['num_splits']
         self.pearson_relevant_feature = bfi_config.feature_data_set['pearson_relevant_feature']
@@ -333,7 +341,7 @@ class CalculateScore:
                 self.textual_description_file_path,
                 usecols=['buyer_id', text_type, 'cnt']
             )
-
+        Logger.info('Start to extract {} features... {}'.format(text_type, self.merge_df.shape))
         _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
         if text_type == 'titles':
             assert _df_t.shape[0] == self.merge_df.shape[0]
@@ -418,7 +426,7 @@ class CalculateScore:
         Logger.info('finish to insert textual features')
         Logger.info('CountVectorizer properties: {}'.format(cv))
 
-    def _append_textual_features(self, _X_train, _X_test):
+    def _append_textual_features(self, _X_train, _X_test, text_type):
         """
         steps:
             1. load objects
@@ -433,17 +441,29 @@ class CalculateScore:
         :param _X_test:
         :return:
         """
-        if not self.title_feature_flag:
-            Logger.info('titles textual feature not in use')
-            return _X_train, _X_test, list(_X_train)
+        if text_type == 'titles':
+            if not self.title_feature_flag:
+                Logger.info('titles textual feature not in use - skip')
+                return _X_train, _X_test, list(_X_train)
+            else:
+                _df_purchase_titles = pd.read_csv(
+                    self.textual_title_file_path,
+                    usecols=['buyer_id', text_type, 'cnt']
+                )
+        elif text_type == 'descriptions':
+            if not self.descriptions_feature_flag:
+                Logger.info('descriptions features not in use - skip')
+                return _X_train, _X_test, list(_X_train)
+            else:
+                _df_purchase_titles = pd.read_csv(
+                    self.textual_description_file_path,
+                    usecols=['buyer_id', text_type, 'cnt']
+                )
+        else:
+            raise ValueError('unknown text_type value: {}'.format(text_type))
 
-        Logger.info('Before added titles features: train: {} test: {}'.format(_X_train.shape, _X_test.shape))
-
-        _df_purchase_titles = pd.read_csv(
-            '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/titles_corpus_710.csv',
-            usecols=['buyer_id', 'titles', 'cnt']
-        )
-        all_buyers_id = list(_X_train['buyer_id']) + list(_X_test['buyer_id'])
+        Logger.info('Before added {} features: train: {} test: {}'.format(
+            text_type, _X_train.shape, _X_test.shape))
 
         _df_train = pd.merge(_df_purchase_titles, _X_train, on='buyer_id')
         _df_test = pd.merge(_df_purchase_titles, _X_test, on='buyer_id')
@@ -461,7 +481,7 @@ class CalculateScore:
         ))
 
         def _prepare_data(_df):
-            texts = _df['titles']
+            texts = _df[text_type]
             texts = texts.str.lower()
             stop_words_en = stop_words.ENGLISH_STOP_WORDS
             texts = texts.apply(lambda x: [item for item in x.split() if item not in stop_words_en])
@@ -481,7 +501,7 @@ class CalculateScore:
         def _concat(_X, _text_features):
             _text_features = _text_features.todense() if isinstance(_text_features, csr_matrix) else _text_features
             df_vec = pd.DataFrame(_text_features)
-            df_vec.columns = ["titles_vec_{}".format(col_name) for col_name in df_vec.columns]
+            df_vec.columns = ["{}_vec_{}".format(text_type, col_name) for col_name in df_vec.columns]
 
             _X = _X.reset_index()
             _X_final = pd.concat((_X, df_vec), axis=1)
@@ -492,7 +512,7 @@ class CalculateScore:
         _X_test = _concat(_X_test, text_features_test_vectorized)
 
         # remove unwanted columns
-        Logger.info('After added titles features: train: {} test: {}'.format(_X_train.shape, _X_test.shape))
+        Logger.info('After added {} features: train: {} test: {}'.format(text_type, _X_train.shape, _X_test.shape))
         return _X_train, _X_test, list(_X_train)
 
     def _pad_description_df(self, _df_desc, _buyer_list):
@@ -1244,7 +1264,8 @@ class CalculateScore:
             y_train, y_test = _y.iloc[train_index], _y.iloc[test_index]
 
             # create textual features
-            X_train, X_test, f_names = self._append_textual_features(X_train, X_test)
+            X_train, X_test, f_names = self._append_textual_features(X_train, X_test, 'titles')
+            X_train, X_test, f_names = self._append_textual_features(X_train, X_test, 'descriptions')
 
             # implement normalization
             if True:
