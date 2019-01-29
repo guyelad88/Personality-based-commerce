@@ -72,14 +72,12 @@ class WrapperLexRank:
 
     """
     def __init__(self):
-
         an = self
         self.input_attr_dict = vars(an)         # save attribute to show them later
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
         self.log_file_name = None
         self.word_cont_dict = dict()    # word and correspond contribute value
-        return
 
     # build log object
     def init_debug_log(self):
@@ -88,7 +86,8 @@ class WrapperLexRank:
         Logger.set_handlers('TestLexRank', self.log_file_name, level='info')
 
     # extract corpus documents from a file
-    def load_corpus_documents(self, corpus_file):
+    @staticmethod
+    def load_corpus_documents(corpus_file):
 
         '''
         :param corpus_file: path to file contain corpuse data (documents)
@@ -101,14 +100,14 @@ class WrapperLexRank:
         return documents
 
     # load item description to summarize
-    def load_description_df(self):
-
+    @staticmethod
+    def load_description_df():
         target_description_df = pd.read_excel(TARGET_ITEM_DESCRIPTION_FILE)  # items and their descriptions
-
         return target_description_df
 
     # check arguments are valid
-    def check_input(self):
+    @staticmethod
+    def check_input():
 
         for c_trait, user_value in PERSONALITY_TRAIT_DICT.iteritems():
             if user_value not in ['H', 'L', 'M']:
@@ -139,7 +138,7 @@ class WrapperLexRank:
             raise ValueError('for vanilla LexRank damping factor must be 0.15')
 
         if LEX_RANK_ALGORITHM_VERSION == 'personality-based-LexRank' and DAMPING_FACTOR not in [0.01, 0.1, 0.2, 0.3]:
-            raise ValueError('for vanilla LexRank damping factor must be 0.15')
+            raise ValueError('for personality-based-LexRank damping factor must be in [0.01, 0.1, 0.2, 0.3]')
 
     # log class arguments
     def log_attribute_input(self):
@@ -275,7 +274,8 @@ class WrapperLexRank:
         self.log_html_format(summary_below_threshold, sorted_ix_below_threshold)
         # self.log_html_format(summary_below_threshold, sorted_ix_below_threshold)
 
-    def log_html_format(self, summary, sorted_ix):
+    @staticmethod
+    def log_html_format(summary, sorted_ix):
         """
         :return: summary in HTML format, in length K (HTML_SUMMARY_SIZE) and ordered properly
         """
@@ -300,7 +300,6 @@ class WrapperLexRank:
 
 
 def main():
-
     LexRankObj = WrapperLexRank()
     LexRankObj.init_debug_log()
     LexRankObj.test_lexrank()

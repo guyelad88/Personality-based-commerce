@@ -83,7 +83,7 @@ calculate_kl = {
     },
     'FIND_WORD_DESCRIPTION': {  # save top words with k description they appear in
         'flag': True,
-        'k': 200
+        'k': 20
     },
     'KL_TYPE': {
         'type': 'words',                    # 'words', 'POS'
@@ -105,18 +105,19 @@ test_lexrank = {
 
     # for vanilla-LexRank set damping factor to 0.1-0.2
     # for personality-based-LexRank set damping factor to 0.01-0.3 (SM: probability not to jump)
-    'damping_factor': 0.2,
+    'damping_factor': 0.1,
 
     'summarization_similarity_threshold': 0.55,      # remove from summarization if the similarity is above
     'personality_trait_dict': {
-        # 'conscientiousness': 'L',
-        'extraversion': 'H',
-        'openness': 'H',
+        'agreeableness': 'H',
+        'conscientiousness': 'H',
+        # 'extraversion': 'H',
+        # 'openness': 'H',
     },
     'lex_rank_algorithm_version': 'personality-based-LexRank',      # 'vanilla-LexRank', 'personality-based-LexRank'
-    'products_ids': ['B00WBJGUA2'],                                 # products id to create summary for them
+    'products_ids': ['B0746GQ56P'],     # id 16: 'B00PQ5UH0C'],      # products id to create summary for them
 
-    'corpus_size': 2000,            # 'max'/1000 - influence IDF - high number is leading to high computation time
+    'corpus_size': 200,            # 'max'/1000 - influence IDF - high number is leading to high computation time
 
     'target_sentences_length': {
         'min': 0,
@@ -130,7 +131,6 @@ test_lexrank = {
     'multi_document_summarization': 'single',                       # summarization method for single/multi documents
 
     'summarization_version': 'top_relevant',                        # 'top_relevant', 'Bollegata', 'Shahaf'
-
 
 
     # current user personality - 'H'\'L'\'M' (high\low\miss(or mean)

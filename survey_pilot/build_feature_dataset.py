@@ -35,7 +35,7 @@ class CalculateScore:
                  cur_penalty='l1', time_purchase_ratio_feature_flag=True, time_purchase_meta_feature_flag=True,
                  vertical_ratio_feature_flag=True, meta_category_feature_flag = True,
                  purchase_percentile_feature_flag=True,
-                 user_meta_feature_flag=True, aspect_feature_flag=True, h_limit=0.6, l_limit=0.4,
+                 user_meta_feature_flag=True, aspect_feature_flag=True, color_feature_flag=True, h_limit=0.6, l_limit=0.4,
                  k_best=10, plot_directory='', user_type='all', normalize_traits=True, classifier_type='xgb',
                  split_bool=False, xgb_c=1, xgb_eta=0.1, xgb_max_depth=4, dir_logistic_results='', cur_time='',
                  k_best_feature_flag=True, kv=None):
@@ -95,6 +95,7 @@ class CalculateScore:
 
         self.titles_features_name = list()          # contain title features names
         self.description_features_name = list()     # contain description features names
+        self.colors_features_name = list()
 
         # system hyper_parameter
         self.threshold_purchase = threshold_purchase    # throw below this number
@@ -120,17 +121,17 @@ class CalculateScore:
         self.xgb_c = xgb_c
         self.xgb_eta = xgb_eta
         self.xgb_max_depth = xgb_max_depth
-        # self.xgb_n_estimators = bfi_config.predict_trait_configs['xgb_n_estimators']            # random.randint(300, 1000)
-        # self.xgb_subsample = bfi_config.predict_trait_configs['xgb_subsample']              # round(random.uniform(0.6, 1), 2)
-        # self.xgb_colsample_bytree = bfi_config.predict_trait_configs['xgb_colsample_bytree']       # round(random.uniform(0.6, 1), 2)
+        self.xgb_n_estimators = bfi_config.predict_trait_configs['xgb_n_estimators']            # random.randint(300, 1000)
+        self.xgb_subsample = bfi_config.predict_trait_configs['xgb_subsample']              # round(random.uniform(0.6, 1), 2)
+        self.xgb_colsample_bytree = bfi_config.predict_trait_configs['xgb_colsample_bytree']       # round(random.uniform(0.6, 1), 2)
 
         # self.xgb_n_estimators = random.randint(300, 1000)
         # self.xgb_subsample = round(random.uniform(0.6, 1), 2)
         # self.xgb_colsample_bytree = round(random.uniform(0.6, 1), 2)
 
-        self.xgb_n_estimators = random.randint(400, 600)
-        self.xgb_subsample = round(random.uniform(0.7, 0.8), 2)
-        self.xgb_colsample_bytree = round(random.uniform(0.6, 0.7), 2)
+        # self.xgb_n_estimators = random.randint(400, 600)
+        # self.xgb_subsample = round(random.uniform(0.7, 0.8), 2)
+        # self.xgb_colsample_bytree = round(random.uniform(0.6, 0.7), 2)
 
         self.n_splits = bfi_config.predict_trait_configs['num_splits']
         self.pearson_relevant_feature = bfi_config.feature_data_set['pearson_relevant_feature']
@@ -149,6 +150,7 @@ class CalculateScore:
         self.purchase_percentile_feature_flag = purchase_percentile_feature_flag
         self.user_meta_feature_flag = user_meta_feature_flag
         self.aspect_feature_flag = aspect_feature_flag
+        self.color_feature_flag = color_feature_flag
         self.title_feature_flag = bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag']
         self.descriptions_feature_flag = bfi_config.predict_trait_configs['dict_feature_flag']['descriptions_feature_flag']
 
@@ -160,6 +162,7 @@ class CalculateScore:
         self.purchase_percentile_feature = bfi_config.feature_data_set['purchase_percentile_feature']
         self.user_meta_feature = bfi_config.feature_data_set['user_meta_feature']
         self.aspect_feature = bfi_config.feature_data_set['aspect_feature']
+        self.color_feature = bfi_config.feature_data_set['color_feature']
 
         self.min_df = bfi_config.predict_trait_configs['min_df']
         self.max_textual_features = bfi_config.predict_trait_configs['max_textual_features']
@@ -171,6 +174,7 @@ class CalculateScore:
 
         self.textual_title_file_path = bfi_config.predict_trait_configs['title_corpus']
         self.textual_description_file_path = bfi_config.predict_trait_configs['description_corpus']
+        self.color_file_path = bfi_config.predict_trait_configs['color_corpus']
 
         self.black_list = bfi_config.black_list
 
@@ -267,6 +271,9 @@ class CalculateScore:
             self.lr_x_feature.extend(self.user_meta_feature)
         if self.aspect_feature_flag:
             self.lr_x_feature.extend(self.aspect_feature)
+        if self.color_feature_flag:
+            self.lr_x_feature.extend(self.color_feature)
+            self.lr_x_feature.extend(self.colors_features_name)
         if self.title_feature_flag:
             self.lr_x_feature.extend(self.titles_features_name)
         if self.descriptions_feature_flag:
@@ -288,6 +295,11 @@ class CalculateScore:
 
     def insert_meta_category(self):
         # Add eBay meta categories features
+        # if not self.meta_category_feature_flag:
+        #     Logger.info('meta category flag is set to false, skip')
+        #     return
+        "Must to run even we do not use categories/verticals features - need to fix"
+
         _num_row_before = self.merge_df.shape[0]
 
         categ_df = pd.read_csv(
@@ -303,6 +315,31 @@ class CalculateScore:
         assert _num_row_before == self.merge_df.shape[0]
         return
 
+    def insert_color_features(self):
+        """
+        :return:
+        """
+        if not self.color_feature_flag:
+            Logger.info('color flag is set to false, skip')
+            return
+
+        _df_color = pd.read_csv(
+            self.color_file_path
+        )
+
+        _df_color = _df_color.loc[_df_color['buyer_id'].isin(list(self.merge_df['buyer_id']))]
+        _df_color.drop(['buyer_name', 'word_avg'], axis=1, inplace=True)
+        if 'colors' in _df_color:
+            _df_color.drop(['colors'], axis=1, inplace=True)
+        Logger.info('before shape (color function): merge: {} color:{}'.format(self.merge_df.shape, _df_color.shape))
+        self.merge_df = pd.merge(
+            self.merge_df,
+            _df_color,
+            left_on=['buyer_id'],
+            right_on=['buyer_id'])
+
+        Logger.info('output shape (color function): merge: {}'.format(self.merge_df.shape))
+
     def no_number_preprocessor(self, tokens):
         import re
         r = re.sub('(\d)+', 'NUM', tokens.lower())
@@ -314,7 +351,7 @@ class CalculateScore:
         """
         create Mean Embedding vector to each user (regared to his titles/descriptions)
         """
-        if text_type not in ['titles', 'descriptions']:
+        if text_type not in ['titles', 'descriptions', 'colors']:
             raise ValueError('text type is not defined: {}'.format(text_type))
 
         # self.textual_title_file_path = bfi_config.predict_trait_configs['title_corpus']
@@ -341,6 +378,19 @@ class CalculateScore:
                 self.textual_description_file_path,
                 usecols=['buyer_id', text_type, 'cnt']
             )
+        elif text_type == 'colors':
+            if not self.color_feature_flag:
+                Logger.info('color features not in use - skip')
+                return
+            else:
+                Logger.info('Start to extract colors features...')
+
+            _df_t = pd.read_csv(
+                self.color_file_path,
+                usecols=['buyer_id', text_type, 'cnt']
+            )
+            _df_t.colors = _df_t.colors.fillna('')
+
         Logger.info('Start to extract {} features... {}'.format(text_type, self.merge_df.shape))
         _df_t = _df_t.loc[_df_t['buyer_id'].isin(list(self.merge_df['buyer_id']))]
         if text_type == 'titles':
@@ -361,7 +411,7 @@ class CalculateScore:
         texts = texts.tolist()
         X_titles_un_normalized = cv.fit_transform(texts)
         X_titles = X_titles_un_normalized
-        print(X_titles.shape[1])
+        # print(X_titles.shape[1])
 
         aa = pd.DataFrame(
             columns=['buyer_id', 'cv_{}'.format(text_type)]
@@ -369,6 +419,9 @@ class CalculateScore:
 
         for i, row in self.merge_df.iterrows():
             if text_type == 'titles':
+                row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
+                row_ndarray = X_titles[row_idx]
+            elif text_type == 'colors':
                 row_idx = np.where(_df_t['buyer_id'] == row['buyer_id'])[0][0]
                 row_ndarray = X_titles[row_idx]
             elif text_type == 'descriptions':
@@ -410,6 +463,10 @@ class CalculateScore:
             self.description_features_name = ['{}_{}'.format(text_type, f_n) for f_n in f_name_raw]
             df3 = pd.DataFrame(bb['cv_{}'.format(text_type)].values.tolist(), columns=self.description_features_name)
 
+        elif text_type == 'colors':
+            self.colors_features_name = ['{}_{}'.format(text_type, f_n) for f_n in f_name_raw]
+            df3 = pd.DataFrame(bb['cv_{}'.format(text_type)].values.tolist(), columns=self.colors_features_name)
+
         else:
             raise ValueError('unknown text type: {}'.format(text_type))
 
@@ -421,6 +478,10 @@ class CalculateScore:
             bb = bb.drop(['cv_{}'.format(text_type)], axis=1)
             before_shape = bb.shape[0]
             self.merge_df = pd.concat([bb, df3], axis=1)
+            assert self.merge_df.shape[0] == before_shape
+        elif text_type == 'colors':
+            before_shape = self.merge_df.shape[0]
+            self.merge_df = pd.concat([self.merge_df, df3], axis=1)
             assert self.merge_df.shape[0] == before_shape
 
         Logger.info('finish to insert textual features')
@@ -459,6 +520,16 @@ class CalculateScore:
                     self.textual_description_file_path,
                     usecols=['buyer_id', text_type, 'cnt']
                 )
+        elif text_type == 'colors':
+            if not self.color_feature_flag:
+                Logger.info('colors features not in use - skip')
+                return _X_train, _X_test, list(_X_train)
+            else:
+                _df_purchase_titles = pd.read_csv(
+                    self.color_file_path,
+                    usecols=['buyer_id', text_type, 'cnt']
+                )
+                _df_purchase_titles.colors = _df_purchase_titles.colors.fillna('')
         else:
             raise ValueError('unknown text_type value: {}'.format(text_type))
 
@@ -835,6 +906,10 @@ class CalculateScore:
     # add price features - value and percentile
     def insert_money_feature(self):
 
+        if not self.purchase_percentile_feature_flag:
+            Logger.info('money features set to false - skip')
+            return
+
         Logger.info('')
         Logger.info('extract money features')
 
@@ -923,6 +998,10 @@ class CalculateScore:
 
     # add time features
     def insert_time_feature(self):
+
+        if not self.time_purchase_meta_feature_flag and not self.time_purchase_ratio_feature_flag:
+            Logger.info('time feature flag is set to false, skip')
+            return
 
         self.merge_df['day_ratio'] = 0.0
         self.merge_df['evening_ratio'] = 0.0
@@ -1266,6 +1345,7 @@ class CalculateScore:
             # create textual features
             X_train, X_test, f_names = self._append_textual_features(X_train, X_test, 'titles')
             X_train, X_test, f_names = self._append_textual_features(X_train, X_test, 'descriptions')
+            X_train, X_test, f_names = self._append_textual_features(X_train, X_test, 'colors')
 
             # implement normalization
             if True:

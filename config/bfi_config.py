@@ -10,6 +10,7 @@ predict_trait_configs = {
 
     'title_corpus': '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/titles_corpus_710.csv',
     'description_corpus': '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/descriptions_corpus_438.csv',
+    'color_corpus': '/Users/gelad/Personality-based-commerce/data/participant_data/purchase_data/color_groups_corpus_413.csv',
 
     'dict_feature_flag': {
         'purchase_percentile_feature_flag': True,
@@ -20,8 +21,9 @@ predict_trait_configs = {
         'meta_category_feature_flag': True,
 
         'title_feature_flag': True,
-
         'descriptions_feature_flag': False,
+
+        'color_feature_flag': False,
 
         'aspect_feature_flag': False
     },
@@ -42,20 +44,20 @@ predict_trait_configs = {
     'num_splits': 5,
 
     'k_best_feature_flag': True,
-    'k_best_list': [100, 50, 150],  # [100, 200, 50],  # [100, 50, 300], [30, 15, 10]
-    'classifier_type': 'xgb',                          # 'xgb', lr
+    'k_best_list': [50, 100, 200],           # , 100, 250],  # [100, 200, 50],  # [100, 50, 300], [30, 15, 10]
+    'classifier_type': 'lr',                          # 'xgb', lr
     'user_type': 'all',                                 # 'cf', 'all'
-    'threshold_list': [5, 10, 15],  # 20               # select 0 to save all users (on predefined df)
-    'penalty': ['l1'],
+    'threshold_list': [20, 30, 40],  # 20               # select 0 to save all users (on predefined df)
+    'penalty': ['l2', 'l1'],
     'C': 1,
     # 'xgb_c': [1, 0.1, 5, 3, 100, 20, 2, 600, 500, 400, 300, 200, 50, 30, 17, 15, 14, 12, 10, 8, 6, 1000],
-    'xgb_c': [0.1, 1],  # [0.1, 1, 5],
+    'xgb_c': [0.1, 1, 5, 10, 20],  # [0.1, 1, 5],
     'xgb_eta': [0.1],     # [0.3, 0.01],    # 4, 0.3, 0.01, 0.001], # 0.3, 0.01, 0.001],
     'xgb_max_depth': [5],  # , 5     #, 3, 5, 7, 1], # [9, 2, 3, 5, 7],
 
-    'xgb_n_estimators': 500,                # un-relevant - randomize value during inside
-    'xgb_subsample': 0.8,                     # un-relevant - randomize value during inside
-    'xgb_colsample_bytree': 0.85,               # un-relevant - randomize value during inside
+    'xgb_n_estimators': '',                # un-relevant - randomize value during inside
+    'xgb_subsample': '',                     # un-relevant - randomize value during inside
+    'xgb_colsample_bytree': '',               # un-relevant - randomize value during inside
 
     'min_df': 60,
     'max_textual_features': 300,
@@ -69,7 +71,7 @@ predict_trait_configs = {
         'ngram_range': [1, 2],
         'stop_words': 'english',
         'min_df': 3,
-        'max_df': 0.15,
+        'max_df': 0.3,
         'norm': 'l2',
         'missing_val': 'max_idf',               # 'max_idf', 'avg_idf', 'zero' - relevant in embedding
         'vec_type': 'vec_tfidf_embeds'
@@ -92,7 +94,7 @@ black_list = ['123ebay','1768064','9285414','h_vivic_vpxwxxtjql','l0rd0ct0d0rk',
 
 feature_data_set = {
 
-        'lr_y_logistic_feature': ['extraversion_group', 'neuroticism_group'],
+        'lr_y_logistic_feature': ['openness_group', 'conscientiousness_group', 'extraversion_group','agreeableness_group', 'neuroticism_group'],
         # all
         # 'lr_y_logistic_feature': ['openness_group', 'conscientiousness_group', 'extraversion_group','agreeableness_group', 'neuroticism_group'],
 
@@ -134,7 +136,70 @@ feature_data_set = {
 
         'user_meta_feature': ['Age', 'gender'],
         'aspect_feature': ['color_ratio', 'colorful_ratio', 'protection_ratio', 'country_ratio', 'brand_ratio',
-                           'brand_unlabeled_ratio']
+                           'brand_unlabeled_ratio'],
+
+        'color_feature': ['copper',
+                         'indigo',
+                         'gold',
+                         'maroon',
+                         'pink',
+                         'violet',
+                         'navy',
+                         'magenta',
+                         'mint',
+                         'lime',
+                         'blue',
+                         'purple',
+                         'black',
+                         'aquamarine',
+                         'white',
+                         'cream',
+                         'red',
+                         'brown',
+                         'turquoise',
+                         'orange',
+                         'yellow',
+                         'olive',
+                         'cyan',
+                         'silver',
+                         'bronze',
+                         'gray',
+                         'grey',
+                         'green',
+                         'beige',
+                         'teal',
+                         'color_ratio',
+                         'copper_groups',
+                         'indigo_groups',
+                         'gold_groups',
+                         'maroon_groups',
+                         'pink_groups',
+                         'violet_groups',
+                         'navy_groups',
+                         'magenta_groups',
+                         'mint_groups',
+                         'lime_groups',
+                         'blue_groups',
+                         'purple_groups',
+                         'black_groups',
+                         'aquamarine_groups',
+                         'white_groups',
+                         'cream_groups',
+                         'red_groups',
+                         'brown_groups',
+                         'turquoise_groups',
+                         'orange_groups',
+                         'yellow_groups',
+                         'olive_groups',
+                         'cyan_groups',
+                         'silver_groups',
+                         'bronze_groups',
+                         'gray_groups',
+                         'grey_groups',
+                         'green_groups',
+                         'beige_groups',
+                         'teal_groups',
+                         'color_ratio_groups']
 }
 
 # all meta_category (without any threshold)

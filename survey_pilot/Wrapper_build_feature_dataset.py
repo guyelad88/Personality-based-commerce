@@ -54,7 +54,7 @@ class Wrapper:
 
     def __init__(self):
 
-        if dict_feature_flag['title_feature_flag'] or dict_feature_flag['descriptions_feature_flag']:
+        if dict_feature_flag['title_feature_flag'] or dict_feature_flag['descriptions_feature_flag'] or dict_feature_flag['color_feature_flag']:
             print('Loading embeddings...    {}'.format(embedding_type))
             if embedding_type == 'ft_amazon':
                 path_embd = '/Users/gelad/Personality-based-commerce/data/word_embedding/embeddings.vec'
@@ -113,7 +113,7 @@ class Wrapper:
         self.threshold_purchase = 1
         self.bool_normalize_features = True
         self.C = C
-        self.cur_penalty = 'l2'
+        self.cur_penalty = None
 
         self.xgb_c = xgb_c
         self.xgb_eta = xgb_eta
@@ -130,6 +130,7 @@ class Wrapper:
         self.purchase_percentile_feature_flag = dict_feature_flag['purchase_percentile_feature_flag']
         self.user_meta_feature_flag = dict_feature_flag['user_meta_feature_flag']
         self.aspect_feature_flag = dict_feature_flag['aspect_feature_flag']
+        self.color_feature_flag = dict_feature_flag['color_feature_flag']
 
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
@@ -243,13 +244,10 @@ class Wrapper:
         self.check_input()          # check if input argument are valid
         self.log_attribute_input()  # log arguments for all model
 
-        if self.model_method == 'linear':
-            raise ValueError('Currently support only logistic classifiers')
-            self.wrapper_experiments_linear()
-
-        elif self.model_method == 'logistic':
+        if self.model_method == 'logistic':
             self.wrapper_experiments_logistic()
-        return
+        else:
+            raise ValueError('unknown model methods: {}'.format(self.model_method))
 
     # run if we choose logistic method
     # run all possible configurations given inputs
@@ -287,47 +285,6 @@ class Wrapper:
         self._save_result_df()
         self._save_to_ablation_csv()
 
-    def wrapper_experiments_linear(self):
-
-        self.k_best_list = [15, 12, 8, 5]
-        self.threshold_list = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65]
-        penalty = ['l1', 'l2']
-
-        # for cur_C in C:
-        for cur_penalty in penalty:
-
-            Logger.info('Penalty: ' + str(cur_penalty))
-            for k_best in self.k_best_list:
-
-                self.openness_score_mae_list = list()
-                self.conscientiousness_score_mae_list = list()
-                self.extraversion_score_mae_list = list()
-                self.agreeableness_score_mae_list = list()
-                self.neuroticism_score_mae_list = list()
-
-                self.openness_score_pearson_list = list()
-                self.conscientiousness_score_pearson_list = list()
-                self.extraversion_score_pearson_list = list()
-                self.agreeableness_score_pearson_list = list()
-                self.neuroticism_score_pearson_list = list()
-
-                '''self.openness_cv_score_list = list()
-                self.conscientiousness_cv_score_list = list()
-                self.extraversion_cv_score_list = list()
-                self.agreeableness_cv_score_list = list()
-                self.neuroticism_cv_score_list = list()'''
-
-                for threshold_purchase in self.threshold_list:
-                    self.threshold_purchase = threshold_purchase
-                    self.k_best = k_best
-                    self.cur_penalty = cur_penalty
-                    Logger.info('Penalty: ' + str(cur_penalty) + ', Threshold: ' + str(threshold_purchase))
-
-                    calculate_obj = self.run_experiments()
-
-                    # cur_key = 'C_' + str(cur_C) + '_Penalty_' + str(cur_penalty) + '_Threshold_' + str(threshold_purchase)
-                    cur_key = '_Penalty_' + str(cur_penalty) + '_Threshold_' + str(threshold_purchase)
-
     # run experiments for a giving arguments
     def run_experiments(self, xgb_c, xgb_eta, xgb_max_depth):
         calculate_obj = CalculateScore(participant_file, item_aspects_file, purchase_history_file, valid_users_file,
@@ -335,7 +292,7 @@ class Wrapper:
                                        self.bool_normalize_features, self.C, self.cur_penalty,
                                        self.time_purchase_ratio_feature_flag, self.time_purchase_meta_feature_flag,
                                        self.vertical_ratio_feature_flag, self.meta_category_feature_flag, self.purchase_percentile_feature_flag,
-                                       self.user_meta_feature_flag, self.aspect_feature_flag, self.h_limit,
+                                       self.user_meta_feature_flag, self.aspect_feature_flag, self.color_feature_flag, self.h_limit,
                                        self.l_limit, self.k_best, self.plot_directory, self.user_type,
                                        self.normalize_traits, self.classifier_type, self.split_bool, xgb_c, xgb_eta,
                                        xgb_max_depth, self.dir_logistic_results, self.cur_time, self.k_best_feature_flag, self.kv)
@@ -343,18 +300,19 @@ class Wrapper:
         # create data set
         if not self.predefined_data_set_flag:
             Logger.info('Start creating data set')
-            # calculate_obj.init_debug_log()  # init log file
+
             calculate_obj.load_clean_csv_results()                  # load data set
             calculate_obj.clean_df()                                # clean df - e.g. remain valid users only
-            # calculate_obj.create_feature_list()                     # create x_feature
 
             calculate_obj.insert_gender_feature()                   # add gender feature
             calculate_obj.remove_except_cf()                        # remove not CF participants
             calculate_obj.extract_user_purchase_connection()        # insert purchase and vertical type to model
             calculate_obj.insert_meta_category()                    # Add eBay meta categories features
             # calculate_obj.insert_titles_features_count()                  # add titles n-grams features
+            calculate_obj.insert_color_features()
             calculate_obj.insert_textual_features_embedding('descriptions')  # add titles n-grams features
             calculate_obj.insert_textual_features_embedding('titles')                  # add titles n-grams features
+            calculate_obj.insert_textual_features_embedding('colors')  # add titles n-grams features
 
             calculate_obj.insert_descriptions_features()            # add descriptions n-grams features
 
@@ -378,10 +336,8 @@ class Wrapper:
             calculate_obj.create_feature_list()
             calculate_obj.load_predefined_data_set(self.predefined_data_set_path)
 
-        if self.model_method == 'linear':
-            calculate_obj.calculate_linear_regression()         # predict values 0-1, MAE and Pearson
-        elif self.model_method == 'logistic':
-            calculate_obj.calculate_logistic_regression()       # predict traits H or L
+        # run logistics models (XGB/LR) - predict whether trait is H or L
+        calculate_obj.calculate_logistic_regression()
 
         return calculate_obj
 
@@ -534,6 +490,7 @@ class Wrapper:
                     'purchase_percentile': self.purchase_percentile_feature_flag,
                     'user_meta': self.user_meta_feature_flag,
                     'item_aspects': self.aspect_feature_flag,
+                    'color': self.color_feature_flag,
                     'text_title': bfi_config.predict_trait_configs['dict_feature_flag']['title_feature_flag'],
                     'text_desc': bfi_config.predict_trait_configs['dict_feature_flag'][
                     'descriptions_feature_flag'],

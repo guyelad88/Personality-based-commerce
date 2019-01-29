@@ -1,10 +1,9 @@
-import math
-from collections import defaultdict
-import numpy as np
 from create_summary import Summarization
 from power_method import stationary_distribution
-
 from utils.logger import Logger
+
+import numpy as np
+import math
 
 
 # class LexRank build all algorithm objects - (Graph (markov matrix)) and use power method class to
@@ -232,64 +231,6 @@ class LexRank:
         self.sentence_already_inserted = summary_obj.sentence_already_inserted
 
         return summary_obj.description_summary_list
-
-    '''
-    # extract summarization using top-relevant
-    def top_relevant_summarization(self):
-
-        Logger.info('')
-        Logger.info('summarization version: top-relevant')
-        Logger.info('summarization similarity threshold: ' + str(self.summarization_similarity_threshold))
-
-        Logger.info('max similarity between sentences: ' + str(round(self.find_max_similarity(), 3)))
-
-        description_summary_list = list()
-        self.sentence_already_inserted = list()
-
-        # sentences which discraded from summarization due to similarity above threshold
-        self.discarded_sentences = list()
-
-        for sentence_idx in self.sorted_ix:
-
-            # check if we have already enough sentences
-            if len(self.sentence_already_inserted) >= self.summary_size:
-                break
-
-            # check if similarity with previous sentences is below threshold
-            cur_max_similarity = self.check_cur_max_similarity(sentence_idx)
-
-            # max similarity above threshold
-            if cur_max_similarity > self.summarization_similarity_threshold:
-                self.discarded_sentences.append(sentence_idx)
-                Logger.info('Sentence ' + str(sentence_idx) + ' above threshold - therefore discarded from summary - ' + str(round(cur_max_similarity, 2)))
-                continue
-
-            # max similarity below threshold
-            else:
-                description_summary_list.append(self.sentences[sentence_idx])
-                self.sentence_already_inserted.append(sentence_idx)
-
-        return description_summary_list
-    
-    
-    # find max similarity between two sentences
-    def find_max_similarity(self):
-        similarity_list = np.asarray(self.similarity_matrix_unnormalized).reshape(-1)
-        similarity_list = filter(lambda a: a != 1, similarity_list)
-        return max(similarity_list)
-
-    # check max similarity with respect to current sentence
-    def check_cur_max_similarity(self, sentence_idx):
-        cur_max_similarity = 0.0
-        similarity_row_list = self.similarity_matrix_unnormalized[sentence_idx]
-
-        # check max similarity with respect to sentence already inserted into summary
-        for inserted_sen_idx in self.sentence_already_inserted:
-            if similarity_row_list[inserted_sen_idx] > cur_max_similarity:
-                cur_max_similarity = similarity_row_list[inserted_sen_idx]
-
-        return cur_max_similarity
-    '''
 
     # adjacency_matrix is linear interpolation between similarity matrix and jump matrix
     def calculate_adjacency_matrix(self, tf_scores):

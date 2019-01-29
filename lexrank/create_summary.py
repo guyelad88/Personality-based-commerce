@@ -1,4 +1,5 @@
 from utils.logger import Logger
+import numpy as np
 
 
 # class Summarization produce summary from personality-based-LexRank results
@@ -141,7 +142,6 @@ class Summarization:
 
     # find max similarity between two sentences
     def find_max_similarity(self):
-        import numpy as np
         similarity_list = np.asarray(self.similarity_matrix_unnormalized).reshape(-1)
         similarity_list = filter(lambda a: a != 1, similarity_list)
         return max(similarity_list)
